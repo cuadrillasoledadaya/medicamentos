@@ -6,29 +6,11 @@ create extension if not exists "pgcrypto";
 create extension if not exists "btree_gist";   -- for tstzrange exclusion on vacations
 
 -- ---------------------------------------------------------------------------
--- 5.1 RLS helpers (SECURITY DEFINER breaks family_members self-reference recursion)
+-- 5.1 RLS helpers — defined AFTER core tables (see after medications).
+-- SECURITY DEFINER breaks family_members self-reference recursion. Placed later
+-- because LANGUAGE sql validates referenced tables at function creation time;
+-- family_members and medications must exist first.
 -- ---------------------------------------------------------------------------
-create or replace function public.is_active_family_member(p_paciente uuid)
-  returns boolean language sql security definer stable set search_path = public as $$
-  select exists (
-    select 1 from family_members
-    where paciente_id = p_paciente and user_id = auth.uid() and status = 'active'
-  );
-$$;
-
-create or replace function public.is_cuidador_principal(p_paciente uuid)
-  returns boolean language sql security definer stable set search_path = public as $$
-  select exists (
-    select 1 from family_members
-    where paciente_id = p_paciente and user_id = auth.uid()
-      and role = 'cuidador_principal' and status = 'active'
-  );
-$$;
-
-create or replace function public.paciente_of_medication(p_medication uuid)
-  returns uuid language sql security definer stable set search_path = public as $$
-  select paciente_id from medications where id = p_medication limit 1;
-$$;
 
 -- ---------------------------------------------------------------------------
 -- 5.2 Enums
@@ -120,6 +102,33 @@ create table medications (
 );
 create index medications_paciente_idx        on medications(paciente_id);
 create index medications_paciente_active_idx on medications(paciente_id) where active;
+
+-- ---------------------------------------------------------------------------
+-- 5.1 RLS helpers (SECURITY DEFINER breaks family_members self-reference recursion)
+-- Placed here (after family_members and medications exist) because LANGUAGE sql
+-- validates referenced tables at function creation time.
+-- ---------------------------------------------------------------------------
+create or replace function public.is_active_family_member(p_paciente uuid)
+  returns boolean language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from family_members
+    where paciente_id = p_paciente and user_id = auth.uid() and status = 'active'
+  );
+$$;
+
+create or replace function public.is_cuidador_principal(p_paciente uuid)
+  returns boolean language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from family_members
+    where paciente_id = p_paciente and user_id = auth.uid()
+      and role = 'cuidador_principal' and status = 'active'
+  );
+$$;
+
+create or replace function public.paciente_of_medication(p_medication uuid)
+  returns uuid language sql security definer stable set search_path = public as $$
+  select paciente_id from medications where id = p_medication limit 1;
+$$;
 
 -- Schedules
 create table schedules (
