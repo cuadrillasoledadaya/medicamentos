@@ -3,6 +3,7 @@
 // for the next 7 days. Idempotent via (schedule_id, scheduled_at) unique constraint.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
+import { fromZonedTime } from 'https://esm.sh/date-fns-tz@3.2.0';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -50,8 +51,27 @@ async function hasVacationOverlap(
 }
 
 /**
+ * Get the day-of-week (0=Sun..6=Sat) of a given calendar date interpreted
+ * in the target timezone. Uses Intl.DateTimeFormat to read the local
+ * weekday without depending on the host's TZ.
+ */
+function getDayOfWeekInTimezone(year: number, month: number, day: number, timezoneId: string): number {
+  // Build an ISO-ish date at noon to avoid DST edge cases for the weekday read
+  const noonUtc = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezoneId,
+    weekday: 'short',
+  });
+  const weekdayName = formatter.format(noonUtc); // 'Sun'..'Sat'
+  const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return map[weekdayName] ?? 0;
+}
+
+/**
  * Generate all scheduled_at timestamps for a schedule over the next 7 days.
- * Respects the schedule's weekday_mask and timezone.
+ * Respects the schedule's weekday_mask and timezone. The returned Date
+ * objects are in UTC, computed from the schedule's time_of_day interpreted
+ * in the paciente's timezone (e.g. 18:51 Europe/Madrid → 16:51 UTC).
  */
 function generateScheduledTimes(
   timeOfDay: string, // "HH:MM"
@@ -66,36 +86,24 @@ function generateScheduledTimes(
     const date = new Date(now);
     date.setDate(date.getDate() + i);
 
-    // Get the day of week in the schedule's timezone
-    // Use a simple approach: get UTC day, adjust for timezone offset
-    const dayOfWeek = date.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
 
-    // Check if this day is in the weekday mask
+    // Compute the weekday in the schedule's timezone (not the host's)
+    const dayOfWeek = getDayOfWeekInTimezone(year, month, day, timezoneId);
     if ((weekdayMask & (1 << dayOfWeek)) === 0) continue;
 
     // Parse time_of_day (HH:MM)
     const [hours, minutes] = timeOfDay.split(':').map(Number);
 
-    // Build the scheduled_at in UTC
-    // We need to convert the local time in the schedule's timezone to UTC
-    // For simplicity, we use the date's UTC components and adjust
-    // A production implementation would use date-fns-tz here
-    const scheduledLocal = new Date(
-      Date.UTC(
-        date.getUTCFullYear(),
-        date.getUTCMonth(),
-        date.getUTCDate(),
-        hours,
-        minutes,
-        0,
-        0,
-      ),
-    );
+    // Build a "wall clock" string for the local time in the target timezone
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const wallClock = `${year}-${pad(month)}-${pad(day)} ${pad(hours)}:${pad(minutes)}:00`;
 
-    // Apply timezone offset approximation
-    // For accurate TZ conversion, use: tzToDate(timezoneId, date, timeOfDay)
-    // For now, store as-is (the schedule's timezone_id is metadata for the UI)
-    results.push(scheduledLocal);
+    // Convert wall-clock time in the target timezone to a real UTC Date
+    const scheduledUtc = fromZonedTime(wallClock, timezoneId);
+    results.push(scheduledUtc);
   }
 
   return results;
@@ -107,6 +115,7 @@ Deno.serve(async (req) => {
   let skippedVacation = 0;
   let skippedExisting = 0;
   let errors = 0;
+  const errorDetails: string[] = [];
 
   try {
     // 1. Fetch all active schedules with their medication and paciente info
@@ -123,7 +132,10 @@ Deno.serve(async (req) => {
           id,
           paciente_id,
           name,
-          active
+          active,
+          pacientes!inner (
+            cuidador_id
+          )
         )
       `,
       )
@@ -147,6 +159,10 @@ Deno.serve(async (req) => {
       const medication = schedule.medications;
       const pacienteId = medication.paciente_id;
       const medicationId = medication.id;
+      // Use the paciente's primary caregiver as the registered_by. The
+      // service-role client has no logged-in user, so getUser() would
+      // return null and the tomas.registered_by FK would reject the row.
+      const registeredBy = medication.pacientes.cuidador_id;
 
       // Generate scheduled times for the next 7 days
       const scheduledTimes = generateScheduledTimes(
@@ -179,13 +195,14 @@ Deno.serve(async (req) => {
                 scheduled_at: scheduledAt.toISOString(),
                 status: 'skipped',
                 skip_reason: 'vacation',
-                registered_by: (await supabase.auth.getUser()).data.user?.id ?? '00000000-0000-0000-0000-000000000000',
+                registered_by: registeredBy,
               },
               { onConflict: 'schedule_id,scheduled_at' },
             );
 
           if (upsertError) {
             errors++;
+            errorDetails.push(`vacation-skip: ${upsertError.code ?? ''} ${upsertError.message}`);
             console.error(`Error creating vacation-skip toma: ${upsertError.message}`);
           } else {
             skippedVacation++;
@@ -202,7 +219,7 @@ Deno.serve(async (req) => {
               paciente_id: pacienteId,
               scheduled_at: scheduledAt.toISOString(),
               status: 'pending',
-              registered_by: (await supabase.auth.getUser()).data.user?.id ?? '00000000-0000-0000-0000-000000000000',
+              registered_by: registeredBy,
             },
             { onConflict: 'schedule_id,scheduled_at' },
           );
@@ -213,6 +230,7 @@ Deno.serve(async (req) => {
             skippedExisting++;
           } else {
             errors++;
+            errorDetails.push(`scheduled_at=${scheduledAt.toISOString()}: ${upsertError.code ?? ''} ${upsertError.message}`);
             console.error(`Error creating toma: ${upsertError.message}`);
           }
         } else {
@@ -233,6 +251,7 @@ Deno.serve(async (req) => {
           skippedExisting,
           errors,
           elapsedMs: elapsed,
+          errorDetails: errorDetails.slice(0, 5),
         },
       }),
       { headers: { 'Content-Type': 'application/json' } },
