@@ -4,6 +4,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { usePacientes } from '../features/pacientes/hooks';
 import { useActivePaciente } from '../stores/activePaciente';
 import { OutboxIndicator } from '../features/tomas/OutboxIndicator';
+import { NotificationPermissionPrompt } from '../features/notifications/NotificationPermissionPrompt';
 
 const navItems = [
   { to: '/', label: 'Inicio' },
@@ -105,6 +106,9 @@ export function AppShell() {
       >
         Medicamentos PWA — v1
       </footer>
+
+      {/* Notification permission prompt */}
+      <NotificationPermissionPrompt />
     </div>
   );
 }

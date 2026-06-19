@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { listTomas, listTodayTomas, markTomaTaken, markTomaSkipped, upsertToma } from './api';
+import { scheduleNotification, cancelNotification } from '../notifications/scheduler';
 
 export function useTomas(pacienteId: string, dateRange?: { from: string; to: string }) {
   return useQuery({
@@ -36,6 +37,7 @@ export function useMarkTomaTaken() {
     onSuccess: ({ data, error }) => {
       if (!error && data) {
         queryClient.invalidateQueries({ queryKey: ['tomas', data.paciente_id] });
+        cancelNotification(data.id);
       }
     },
   });
@@ -50,6 +52,7 @@ export function useMarkTomaSkipped() {
     onSuccess: ({ data, error }) => {
       if (!error && data) {
         queryClient.invalidateQueries({ queryKey: ['tomas', data.paciente_id] });
+        cancelNotification(data.id);
       }
     },
   });
@@ -63,6 +66,13 @@ export function useUpsertToma() {
     onSuccess: ({ data, error }) => {
       if (!error && data) {
         queryClient.invalidateQueries({ queryKey: ['tomas', data.paciente_id] });
+        // Schedule notification for new pending tomas
+        if (data.status === 'pending') {
+          scheduleNotification({
+            id: data.id,
+            scheduled_at: data.scheduled_at,
+          });
+        }
       }
     },
   });
