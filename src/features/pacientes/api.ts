@@ -35,7 +35,30 @@ export async function createPaciente(
     .insert([{ ...input, cuidador_id: user.user.id }])
     .select()
     .single();
-  return { data: data as Paciente | null, error: error ? new Error(error.message) : null };
+  if (error) {
+    return { data: data as Paciente | null, error: new Error(error.message) };
+  }
+
+  // Auto-register the creator as cuidador_principal in family_members.
+  // This is required by the RLS on medications / schedules / plans / tomas:
+  // those policies check is_cuidador_principal(paciente_id), which reads
+  // from family_members. Without this row, the creator cannot add any
+  // data to their own paciente even though they own it.
+  const { error: familyError } = await client
+    .from('family_members')
+    .insert([{
+      paciente_id: data.id,
+      user_id: user.user.id,
+      role: 'cuidador_principal',
+      status: 'active',
+    }]);
+  if (familyError) {
+    // Surface a warning but don't roll back the paciente — the user can
+    // re-run the backfill SQL to fix the missing family_member row.
+    console.warn('createPaciente: failed to create family_member row', familyError);
+  }
+
+  return { data: data as Paciente | null, error: null };
 }
 
 export async function updatePaciente(
