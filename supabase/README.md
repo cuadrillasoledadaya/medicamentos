@@ -37,8 +37,39 @@ This is a **fresh-project migration**. There are no existing tables to drop or m
 | Item | Status | Reason |
 |------|--------|--------|
 | `adherence_daily` rollup function | **OFF** in v1 | Computed via `v_adherence_28d` view at query time; function commented out for v2 |
-| `notify-fallback` Edge Function | **Later PR** | Requires Resend/Twilio credentials; not needed for in-app notifications |
 | RLS verification | **PR 7** | Dedicated Playwright `rls.spec.ts` suite will validate the contract |
+
+## Edge Functions
+
+### schedule-generator
+
+Generates `tomas` rows for the next 7 days based on active schedules. Deployed as a Supabase Edge Function and scheduled daily via `pg_cron` or Supabase's Scheduled Functions UI.
+
+**Deploy:**
+```bash
+supabase functions deploy schedule-generator --no-verify-jwt
+supabase secrets set SUPABASE_URL=<project-url>
+supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<service-key>
+```
+
+**Schedule:** Run `supabase/migrations/0002_schedule_generator_cron.sql` or use the Supabase dashboard → Edge Functions → Schedule.
+
+### notify-fallback
+
+Sends email (Resend) and SMS (Twilio) notifications when a toma is inserted. Triggered by a DB trigger. Gracefully handles missing API keys.
+
+**Deploy:**
+```bash
+supabase functions deploy notify-fallback --no-verify-jwt
+supabase secrets set RESEND_API_KEY=<key>       # optional
+supabase secrets set TWILIO_ACCOUNT_SID=<sid>    # optional
+supabase secrets set TWILIO_AUTH_TOKEN=<token>   # optional
+supabase secrets set TWILIO_FROM_NUMBER=<number> # optional
+```
+
+**Trigger:** Run `supabase/migrations/0003_notify_fallback_trigger.sql`.
+
+See `docs/notifications.md` for the full pipeline explanation.
 
 ## Notes
 
