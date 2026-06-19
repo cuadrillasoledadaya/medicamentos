@@ -6,12 +6,19 @@ import type { Medication } from '../../lib/database.types';
 interface MedicationListProps {
   medications: Medication[];
   onArchive?: (id: string) => void;
+  onDelete?: (id: string) => void;
 }
 
-export function MedicationList({ medications, onArchive }: MedicationListProps) {
+export function MedicationList({ medications, onArchive, onDelete }: MedicationListProps) {
   if (medications.length === 0) {
     return <p style={{ color: '#888', textAlign: 'center', padding: '2rem' }}>No hay medicamentos registrados.</p>;
   }
+
+  const handleDelete = (id: string, name: string) => {
+    if (onDelete && window.confirm(`¿Eliminar "${name}"? Esta acción borra también sus horarios y tomas. No se puede deshacer.`)) {
+      onDelete(id);
+    }
+  };
 
   return (
     <ul style={styles.list}>
@@ -30,11 +37,22 @@ export function MedicationList({ medications, onArchive }: MedicationListProps) 
               <StockIndicator current={med.stock_estimate} threshold={med.low_stock_threshold} />
             </div>
           </Link>
-          {med.active && onArchive && (
-            <button onClick={() => onArchive(med.id)} style={styles.archiveBtn}>
-              Desactivar
-            </button>
-          )}
+          <div style={styles.actions}>
+            {med.active && onArchive && (
+              <button onClick={() => onArchive(med.id)} style={styles.archiveBtn}>
+                Desactivar
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={() => handleDelete(med.id, med.name)}
+                style={styles.deleteBtn}
+                aria-label={`Eliminar ${med.name}`}
+              >
+                Eliminar
+              </button>
+            )}
+          </div>
         </li>
       ))}
     </ul>
@@ -87,5 +105,19 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '4px',
     cursor: 'pointer',
     fontSize: '0.75rem',
+  },
+  deleteBtn: {
+    padding: '0.25rem 0.5rem',
+    background: '#dc2626',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.75rem',
+  },
+  actions: {
+    display: 'flex',
+    gap: '0.25rem',
+    alignItems: 'center',
   },
 };

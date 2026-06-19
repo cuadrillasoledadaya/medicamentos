@@ -84,6 +84,14 @@ export async function archiveMedication(id: string): Promise<{ data: Medication 
   return { data: data as Medication | null, error: error ? new Error(error.message) : null };
 }
 
+export async function deleteMedication(id: string): Promise<{ data: null; error: Error | null }> {
+  const { error } = await client
+    .from('medications')
+    .delete()
+    .eq('id', id);
+  return { data: null, error: error ? new Error(error.message) : null };
+}
+
 export async function uploadPhoto(
   medicationId: string,
   file: File,

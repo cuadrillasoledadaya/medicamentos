@@ -7,6 +7,7 @@ import {
   createMedication,
   updateMedication,
   archiveMedication,
+  deleteMedication,
   uploadPhoto,
 } from './api';
 
@@ -71,6 +72,17 @@ export function useArchiveMedication() {
       if (!error && data) {
         queryClient.invalidateQueries({ queryKey: ['medications', data.paciente_id, 'list'] });
       }
+    },
+  });
+}
+
+export function useDeleteMedication() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => deleteMedication(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['medications'] });
     },
   });
 }

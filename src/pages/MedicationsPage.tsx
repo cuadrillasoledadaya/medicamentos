@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useActivePaciente } from '../stores/activePaciente';
-import { useMedications, useArchiveMedication } from '../features/medications/hooks';
+import { useMedications, useArchiveMedication, useDeleteMedication } from '../features/medications/hooks';
 import { MedicationForm } from '../features/medications/MedicationForm';
 import { MedicationList } from '../features/medications/MedicationList';
 
@@ -12,6 +12,7 @@ export default function MedicationsPage() {
   const navigate = useNavigate();
   const { data: medications, isLoading } = useMedications(activePacienteId ?? '');
   const archiveMutation = useArchiveMedication();
+  const deleteMutation = useDeleteMedication();
   const [showForm, setShowForm] = useState(false);
 
   if (!activePacienteId) {
@@ -29,6 +30,10 @@ export default function MedicationsPage() {
 
   const handleArchive = async (id: string) => {
     await archiveMutation.mutateAsync(id);
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteMutation.mutateAsync(id);
   };
 
   return (
@@ -49,7 +54,7 @@ export default function MedicationsPage() {
         </div>
       )}
 
-      <MedicationList medications={medications ?? []} onArchive={handleArchive} />
+      <MedicationList medications={medications ?? []} onArchive={handleArchive} onDelete={handleDelete} />
     </div>
   );
 }
