@@ -1,6 +1,9 @@
-// AppShell: top bar, navigation, main content area, status footer.
+// AppShell: top bar with multi-paciente selector, navigation, main content area, status footer.
 
 import { NavLink, Outlet } from 'react-router-dom';
+import { usePacientes } from '../features/pacientes/hooks';
+import { useActivePaciente } from '../stores/activePaciente';
+import { OutboxIndicator } from '../features/tomas/OutboxIndicator';
 
 const navItems = [
   { to: '/', label: 'Inicio' },
@@ -11,6 +14,11 @@ const navItems = [
 ];
 
 export function AppShell() {
+  const { data: pacientes } = usePacientes();
+  const { activePacienteId, setActivePaciente } = useActivePaciente();
+
+  const activePaciente = pacientes?.find((p) => p.id === activePacienteId);
+
   return (
     <div
       style={{
@@ -29,10 +37,29 @@ export function AppShell() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          gap: '1rem',
         }}
       >
         <h1 style={{ margin: 0, fontSize: '1.2rem' }}>Medicamentos</h1>
-        <nav style={{ display: 'flex', gap: '0.5rem' }}>
+
+        {/* Multi-paciente selector */}
+        {pacientes && pacientes.length > 0 && (
+          <select
+            value={activePacienteId ?? ''}
+            onChange={(e) => setActivePaciente(e.target.value || null)}
+            style={styles.selector}
+            title="Seleccionar paciente activo"
+          >
+            <option value="">— Seleccionar paciente —</option>
+            {pacientes.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        )}
+
+        <nav style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -49,8 +76,17 @@ export function AppShell() {
               {item.label}
             </NavLink>
           ))}
+          <OutboxIndicator />
         </nav>
       </header>
+
+      {/* Active paciente banner */}
+      {activePaciente && (
+        <div style={styles.banner}>
+          Paciente activo: <strong>{activePaciente.name}</strong>
+          <span style={styles.tz}>({activePaciente.timezone_id})</span>
+        </div>
+      )}
 
       {/* Main content */}
       <main style={{ flex: 1, padding: '1rem' }}>
@@ -72,3 +108,24 @@ export function AppShell() {
     </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  selector: {
+    padding: '0.375rem 0.5rem',
+    borderRadius: '4px',
+    border: '1px solid rgba(255,255,255,0.3)',
+    background: 'rgba(255,255,255,0.15)',
+    color: '#fff',
+    fontSize: '0.875rem',
+    cursor: 'pointer',
+    maxWidth: '200px',
+  },
+  banner: {
+    padding: '0.375rem 1rem',
+    background: '#e0f2fe',
+    fontSize: '0.8rem',
+    color: '#0369a1',
+    textAlign: 'center',
+  },
+  tz: { color: '#6b7280', marginLeft: '0.25rem' },
+};

@@ -13,6 +13,7 @@ const PacientesPage = lazy(() => import('./pages/PacientesPage'));
 const MedicationsPage = lazy(() => import('./pages/MedicationsPage'));
 const CalendarPage = lazy(() => import('./pages/CalendarPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const MedicationDetailPage = lazy(() => import('./pages/MedicationDetailPage'));
 
 // Auth pages (eager — small and needed for auth flow)
 import { SignInPage } from './features/auth/SignInPage';
@@ -41,8 +42,16 @@ export const router = createBrowserRouter([
         element: SuspenseWrapper(<PacientesPage />),
       },
       {
+        path: '/pacientes/new',
+        element: SuspenseWrapper(<PacientesPage />),
+      },
+      {
         path: '/medications',
         element: SuspenseWrapper(<MedicationsPage />),
+      },
+      {
+        path: '/medications/:id',
+        element: SuspenseWrapper(<MedicationDetailPage />),
       },
       {
         path: '/calendar',
