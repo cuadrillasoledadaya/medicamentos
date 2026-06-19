@@ -33,7 +33,11 @@ export default function MedicationsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    await deleteMutation.mutateAsync(id);
+    try {
+      await deleteMutation.mutateAsync(id);
+    } catch (e: any) {
+      alert(`Error al eliminar: ${e?.message ?? 'desconocido'}`);
+    }
   };
 
   return (
