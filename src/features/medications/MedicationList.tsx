@@ -1,5 +1,6 @@
 // MedicationList — list view with photo thumbnail, name, dose, stock indicator.
 
+import { Link } from 'react-router-dom';
 import type { Medication } from '../../lib/database.types';
 
 interface MedicationListProps {
@@ -16,13 +17,19 @@ export function MedicationList({ medications, onArchive }: MedicationListProps) 
     <ul style={styles.list}>
       {medications.map((med) => (
         <li key={med.id} style={{ ...styles.item, opacity: med.active ? 1 : 0.5 }}>
-          <div style={styles.info}>
-            <span style={styles.name}>{med.name}</span>
-            <span style={styles.dose}>
-              {med.dose_value} {med.dose_unit === 'other' ? med.dose_unit_other : med.dose_unit}
-            </span>
-            <StockIndicator current={med.stock_estimate} threshold={med.low_stock_threshold} />
-          </div>
+          <Link
+            to={`/medications/${med.id}`}
+            style={styles.link}
+            aria-label={`Ver detalle de ${med.name}`}
+          >
+            <div style={styles.info}>
+              <span style={styles.name}>{med.name}</span>
+              <span style={styles.dose}>
+                {med.dose_value} {med.dose_unit === 'other' ? med.dose_unit_other : med.dose_unit}
+              </span>
+              <StockIndicator current={med.stock_estimate} threshold={med.low_stock_threshold} />
+            </div>
+          </Link>
           {med.active && onArchive && (
             <button onClick={() => onArchive(med.id)} style={styles.archiveBtn}>
               Desactivar
@@ -61,6 +68,14 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #e5e7eb',
   },
   info: { display: 'flex', flexDirection: 'column', gap: '0.125rem' },
+  link: {
+    flex: 1,
+    textDecoration: 'none',
+    color: 'inherit',
+    cursor: 'pointer',
+    padding: '0.25rem',
+    borderRadius: '4px',
+  },
   name: { fontWeight: 600, fontSize: '1rem' },
   dose: { fontSize: '0.875rem', color: '#6b7280' },
   stock: { fontSize: '0.75rem' },
