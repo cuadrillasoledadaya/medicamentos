@@ -1,0 +1,138 @@
+// Notification scheduler — main-thread helper for scheduling/canceling SW notifications.
+// Communicates with the Service Worker via postMessage.
+
+const notificationTimers = new Map<string, number>();
+
+/**
+ * Request Notification permission from the user.
+ * Returns the current permission state.
+ */
+export async function requestNotificationPermission(): Promise<NotificationPermission> {
+  if (!('Notification' in window)) {
+    return 'denied';
+  }
+
+  if (Notification.permission === 'granted') {
+    return 'granted';
+  }
+
+  if (Notification.permission === 'denied') {
+    return 'denied';
+  }
+
+  const result = await Notification.requestPermission();
+  return result;
+}
+
+/**
+ * Get the current notification permission state.
+ */
+export function getNotificationPermission(): NotificationPermission {
+  if (!('Notification' in window)) return 'denied';
+  return Notification.permission;
+}
+
+/**
+ * Schedule a notification for a specific toma.
+ * Sends a message to the Service Worker to schedule the notification.
+ */
+export function scheduleNotification(toma: {
+  id: string;
+  scheduled_at: string;
+  medication_name?: string;
+  dose_value?: number;
+  dose_unit?: string;
+}): void {
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+    return;
+  }
+
+  const scheduledAt = new Date(toma.scheduled_at);
+  const now = new Date();
+
+  // Only schedule future tomas
+  if (scheduledAt <= now) return;
+
+  navigator.serviceWorker.controller.postMessage({
+    type: 'SCHEDULE',
+    toma: {
+      id: toma.id,
+      scheduledAt: toma.scheduled_at,
+      medicationName: toma.medication_name ?? 'Medicamento',
+      doseValue: toma.dose_value ?? 0,
+      doseUnit: toma.dose_unit ?? '',
+    },
+  });
+}
+
+/**
+ * Cancel a scheduled notification for a specific toma.
+ */
+export function cancelNotification(tomaId: string): void {
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+    return;
+  }
+
+  navigator.serviceWorker.controller.postMessage({
+    type: 'CANCEL',
+    tomaId,
+  });
+
+  // Also clear any local timers
+  const timerId = notificationTimers.get(tomaId);
+  if (timerId) {
+    clearTimeout(timerId);
+    notificationTimers.delete(tomaId);
+  }
+}
+
+/**
+ * Detect if the user is on iOS (for notification reliability badge).
+ */
+export function isIOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+/**
+ * Get the notification reliability status.
+ * Returns 'green' (likely delivered), 'yellow' (iOS — in-app only), or 'red' (permission denied).
+ */
+export function getNotificationReliability(): 'green' | 'yellow' | 'red' {
+  const permission = getNotificationPermission();
+
+  if (permission === 'denied') return 'red';
+  if (isIOS()) return 'yellow';
+  return 'green';
+}
+
+/**
+ * Set up message handler for SW → main thread communication.
+ * Handles TAKEN, SNOOZE, and SKIP actions from notification buttons.
+ */
+export function setupNotificationMessageHandler(
+  callbacks: {
+    onTaken?: (tomaId: string) => void;
+    onSnooze?: (tomaId: string, minutes: number) => void;
+    onSkip?: (tomaId: string, reason: string) => void;
+  },
+): void {
+  if (!('serviceWorker' in navigator)) return;
+
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    const { type, tomaId, snoozeMinutes, reason } = event.data;
+
+    switch (type) {
+      case 'TAKEN':
+        callbacks.onTaken?.(tomaId);
+        break;
+      case 'SNOOZE':
+        callbacks.onSnooze?.(tomaId, snoozeMinutes);
+        break;
+      case 'SKIP':
+        callbacks.onSkip?.(tomaId, reason ?? 'notification-skip');
+        break;
+    }
+  });
+}
