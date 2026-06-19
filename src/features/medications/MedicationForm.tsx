@@ -1,5 +1,6 @@
 // MedicationForm — react-hook-form + Zod for creating/editing a medication.
 
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -63,8 +64,18 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
   });
 
   const selectedUnit = watch('dose_unit');
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  if (!pacienteId) {
+    return (
+      <div style={{ padding: '1rem', color: '#dc2626', background: '#fef2f2', borderRadius: '4px' }}>
+        No hay un paciente activo seleccionado. Andá a "Pacientes" y elegí o creá uno antes de agregar medicamentos.
+      </div>
+    );
+  }
 
   const onSubmit = async (data: MedicationFormData) => {
+    setSubmitError(null);
     const payload = {
       paciente_id: pacienteId,
       name: data.name,
@@ -78,33 +89,48 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
       low_stock_threshold: data.low_stock_threshold,
     };
 
-    if (medication) {
-      const result = await updateMutation.mutateAsync({
-        id: medication.id,
-        patch: {
-          name: data.name,
-          dose_value: data.dose_value,
-          dose_unit: data.dose_unit,
-          dose_unit_other: data.dose_unit === 'other' ? data.dose_unit_other : null,
-          route: data.route,
-          frequency_hint: data.frequency_hint || null,
-          notes: data.notes || null,
-          stock_estimate: data.stock_estimate,
-          low_stock_threshold: data.low_stock_threshold,
-        },
-      });
-      if (!result.error) onSuccess?.();
-    } else {
-      const result = await createMutation.mutateAsync(payload);
-      if (!result.error) {
+    try {
+      if (medication) {
+        const result = await updateMutation.mutateAsync({
+          id: medication.id,
+          patch: {
+            name: data.name,
+            dose_value: data.dose_value,
+            dose_unit: data.dose_unit,
+            dose_unit_other: data.dose_unit === 'other' ? data.dose_unit_other : null,
+            route: data.route,
+            frequency_hint: data.frequency_hint || null,
+            notes: data.notes || null,
+            stock_estimate: data.stock_estimate,
+            low_stock_threshold: data.low_stock_threshold,
+          },
+        });
+        if (result.error) {
+          setSubmitError(result.error.message);
+          return;
+        }
+        onSuccess?.();
+      } else {
+        const result = await createMutation.mutateAsync(payload);
+        if (result.error) {
+          setSubmitError(result.error.message);
+          return;
+        }
         reset();
         onSuccess?.();
       }
+    } catch (e: any) {
+      setSubmitError(e?.message ?? 'Error desconocido al guardar');
     }
   };
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} style={styles.form}>
+      {submitError && (
+        <div style={{ padding: '0.75rem', background: '#fef2f2', color: '#dc2626', borderRadius: '4px', fontSize: '0.875rem' }}>
+          <strong>Error:</strong> {submitError}
+        </div>
+      )}
       <div style={styles.field}>
         <label htmlFor="name" style={styles.label}>Nombre</label>
         <input id="name" type="text" {...register('name')} style={styles.input} placeholder="Nombre del medicamento" />
