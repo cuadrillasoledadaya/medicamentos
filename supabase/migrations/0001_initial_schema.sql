@@ -427,11 +427,24 @@ create trigger medications_stock_audit
 -- ---------------------------------------------------------------------------
 -- 5.5 RLS
 -- ---------------------------------------------------------------------------
-alter table pacientes, family_members, temporadas, plans, medications, schedules,
-              tomas, tomas_archive, vacations, retention_policies, notification_settings,
-              interactions, stock_adjustments, adherence_daily,
-              temporada_reopen_audit, patient_trip_adjustments
-  enable row level security;
+-- ALTER TABLE in Postgres operates on ONE table per statement; comma-separated
+-- lists are NOT supported. Enable RLS on each table individually.
+alter table pacientes                enable row level security;
+alter table family_members           enable row level security;
+alter table temporadas               enable row level security;
+alter table plans                    enable row level security;
+alter table medications              enable row level security;
+alter table schedules                enable row level security;
+alter table tomas                    enable row level security;
+alter table tomas_archive            enable row level security;
+alter table vacations                enable row level security;
+alter table retention_policies       enable row level security;
+alter table notification_settings    enable row level security;
+alter table interactions             enable row level security;
+alter table stock_adjustments        enable row level security;
+alter table adherence_daily          enable row level security;
+alter table temporada_reopen_audit   enable row level security;
+alter table patient_trip_adjustments enable row level security;
 
 -- Pacientes
 create policy pacientes_read  on pacientes for select
