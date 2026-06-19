@@ -1,20 +1,23 @@
-// React Router v6 setup with lazy routes and Suspense.
+// React Router v6 setup with lazy routes, Suspense, and auth guards.
 
 import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { LoadingScreen } from './components/LoadingScreen';
 import { NotFoundPage } from './components/NotFoundPage';
+import { RequireAuth } from './components/RequireAuth';
 
 // Lazy-loaded pages
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
-const SignInPage = lazy(() => import('./pages/SignInPage'));
-const SignUpPage = lazy(() => import('./pages/SignUpPage'));
-const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'));
 const PacientesPage = lazy(() => import('./pages/PacientesPage'));
 const MedicationsPage = lazy(() => import('./pages/MedicationsPage'));
 const CalendarPage = lazy(() => import('./pages/CalendarPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+
+// Auth pages (eager — small and needed for auth flow)
+import { SignInPage } from './features/auth/SignInPage';
+import { SignUpPage } from './features/auth/SignUpPage';
+import { AuthCallbackPage } from './features/auth/AuthCallbackPage';
 
 function SuspenseWrapper(children: React.ReactNode) {
   return <Suspense fallback={<LoadingScreen />}>{children}</Suspense>;
@@ -22,7 +25,11 @@ function SuspenseWrapper(children: React.ReactNode) {
 
 export const router = createBrowserRouter([
   {
-    element: <AppShell />,
+    element: (
+      <RequireAuth>
+        <AppShell />
+      </RequireAuth>
+    ),
     errorElement: <NotFoundPage />,
     children: [
       {
@@ -47,7 +54,7 @@ export const router = createBrowserRouter([
       },
     ],
   },
-  // Auth routes (outside AppShell)
+  // Auth routes (outside AppShell, no auth required)
   {
     path: '/auth/sign-in',
     element: SuspenseWrapper(<SignInPage />),
@@ -60,7 +67,7 @@ export const router = createBrowserRouter([
     path: '/auth/callback',
     element: SuspenseWrapper(<AuthCallbackPage />),
   },
-  // Redirect old /login to /auth/sign-in
+  // Redirect old paths
   {
     path: '/login',
     element: <Navigate to="/auth/sign-in" replace />,
