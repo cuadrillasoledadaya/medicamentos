@@ -64,17 +64,57 @@ medicamentos/
 
 ## Status
 
-| Phase | Status | Notes |
-|-------|--------|-------|
-| PR 1 — Bootstrap + Migration | **Done** | Git repo, Vite scaffold, dependencies, SQL migration file |
-| PR 2 — Frontend Foundation + Auth | Planned | lib/ data layer, app shell, auth flow, PWA config |
-| PR 3 — Core Data Plane | Planned | Pacientes, medications, schedules, plans, tomas lifecycle |
-| PR 4 — Reminder Pipeline | Planned | Edge Functions, SW notifications, email/SMS fallback |
-| PR 5 — Insight + Curation | Planned | Adherence dashboard, interactions, stock alerts |
-| PR 6 — Lifecycle Features | Planned | Vacation mode, retention, reports, travel adjustment, reopen |
-| PR 7 — Polish + Tests | Planned | Settings, iOS badge, Vitest, Playwright RLS suite |
+| Phase | Status | Branch | Notes |
+|-------|--------|--------|-------|
+| PR 1 — Bootstrap + Migration | **Done** | `feat/medication-tracker-pwa-pr1-bootstrap` | Git repo, Vite scaffold, dependencies, 0001 schema |
+| PR 2 — Frontend Foundation + Auth | **Done** | `feat/medication-pr2-frontend-foundation` | lib/ data layer, app shell, auth flow, PWA config |
+| PR 3 — Core Data Plane | **Done** | `feat/medication-pr3-core-data-plane` | Pacientes, medications, schedules, plans, tomas lifecycle |
+| PR 4 — Reminder Pipeline | **Done** | `feat/medication-pr4-reminder-pipeline` | schedule-generator + notify-fallback Edge Functions, SW notifications |
+| PR 5 — Insight + Curation | **Done** | `feat/medication-pr5a-adherence` + `pr5b-interactions-stock` | Adherence dashboard, interactions, stock alerts |
+| PR 6 — Lifecycle Features | **Done** | `feat/medication-pr6{a,b,c}-*` | Vacation, retention, reports, travel, reopen |
+| PR 7 — Polish + Tests | **Done** | `feat/medication-pr7{a,b,c,d}-*` | Settings UI, iOS badge, Vitest (61 tests), Playwright (26 E2E + RLS), strict TDD activated |
 
-### Pending
+## Testing
 
-- **Supabase credentials**: The project owner needs to provide `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in `.env.local` before PR 2+ can connect to the database.
-- **Apply migration**: Run `supabase/migrations/0001_initial_schema.sql` in the Supabase SQL Editor (see `supabase/README.md`).
+The project uses **strict TDD** from this point forward. All new code must follow the RED-GREEN-REFACTOR cycle.
+
+### Test runners
+
+| Layer | Tool | Command | Location |
+|-------|------|---------|----------|
+| Unit + integration | Vitest 4 (jsdom) | `pnpm test:run` | `src/lib/**/*.test.ts` |
+| E2E + RLS contract | Playwright 1.61 | `pnpm test:e2e` | `tests/e2e/**/*.spec.ts` |
+| Type check | TypeScript | `pnpm tsc --noEmit` | — |
+| Lint | ESLint | `pnpm lint` | — |
+| Coverage | v8 (Vitest) | `pnpm test:coverage` | `coverage/` (threshold 60%) |
+
+### E2E test setup (one-time)
+
+The Playwright suite uses two test users in the live Supabase project. Create them in **Supabase Auth Dashboard → Users → Add user** with **"Auto Confirm User"** enabled:
+
+- `e2e-test-a@medicamentos.test`
+- `e2e-test-b@medicamentos.test`
+
+Then install Chromium and run:
+
+```bash
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
+
+The RLS contract test (`tests/e2e/rls.spec.ts`) signs in as both users and verifies that cross-user SELECT/INSERT/UPDATE/DELETE attempts on every RLS-protected table are rejected.
+
+### TDD workflow
+
+For any new feature or bug fix:
+
+1. **RED** — write the failing test first (Vitest for unit, Playwright for E2E).
+2. **GREEN** — implement the minimum code to pass the test.
+3. **REFACTOR** — clean up while keeping tests green.
+
+Coverage threshold is 60% on the Vitest v8 report. PRs that drop below this will be rejected by `sdd-verify`.
+
+### Pending manual steps
+
+- **Apply 0006 migration** in the Supabase SQL Editor to enable the adherence view (`v_adherence_28d`). The SQL is in `supabase/migrations/0006_adherence_view.sql` (idempotent — safe to re-run).
+- **Create E2E test users** (see above) before running `pnpm test:e2e`.
