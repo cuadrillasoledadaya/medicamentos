@@ -1,6 +1,6 @@
 // Time helpers — timezone-aware formatting and parsing using date-fns-tz.
 
-import { format, parse, addHours, subHours } from 'date-fns';
+import { parse, addHours, subHours } from 'date-fns';
 import { formatInTimeZone, toZonedTime, fromZonedTime } from 'date-fns-tz';
 
 /**

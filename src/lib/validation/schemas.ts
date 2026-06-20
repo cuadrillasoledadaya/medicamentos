@@ -19,9 +19,7 @@ const DOSE_UNITS = [
 export const medicationSchema = z.object({
   name: z.string().min(1, 'El nombre es obligatorio'),
   dose_value: z.number().positive('La dosis debe ser mayor a 0'),
-  dose_unit: z.enum(DOSE_UNITS, {
-    errorMap: () => ({ message: 'Unidad de dosis inválida' }),
-  }),
+  dose_unit: z.enum(DOSE_UNITS),
   dose_unit_other: z.string(),
   route: z.string().min(1, 'La vía es obligatoria'),
   frequency_hint: z.string(),
