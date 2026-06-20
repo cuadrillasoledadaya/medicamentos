@@ -19,11 +19,13 @@ const InteractionsPage = lazy(() => import('./features/interactions/routes'));
 const StockPage = lazy(() => import('./features/stock/routes'));
 const VacationPage = lazy(() => import('./features/vacation/routes'));
 const RetentionPage = lazy(() => import('./features/retention/routes'));
+const ReportsPage = lazy(() => import('./features/reports/routes'));
 
 // Auth pages (eager — small and needed for auth flow)
 import { SignInPage } from './features/auth/SignInPage';
 import { SignUpPage } from './features/auth/SignUpPage';
 import { AuthCallbackPage } from './features/auth/AuthCallbackPage';
+import { ShareViewer } from './features/reports/ShareViewer';
 
 function SuspenseWrapper(children: React.ReactNode) {
   return <Suspense fallback={<LoadingScreen />}>{children}</Suspense>;
@@ -86,9 +88,17 @@ export const router = createBrowserRouter([
         path: '/retention',
         element: SuspenseWrapper(<RetentionPage />),
       },
+      {
+        path: '/reports/export',
+        element: SuspenseWrapper(<ReportsPage />),
+      },
     ],
   },
   // Auth routes (outside AppShell, no auth required)
+  {
+    path: '/share/:token',
+    element: SuspenseWrapper(<ShareViewer />),
+  },
   {
     path: '/auth/sign-in',
     element: SuspenseWrapper(<SignInPage />),
