@@ -15,34 +15,36 @@ const submitLabel = /Iniciar sesión|Sign in|Entrar/i;
 
 test.describe('Authentication', () => {
   test('sign-in with valid credentials redirects to dashboard', async ({ page }) => {
-    await page.goto('/login');
+    await page.goto('/auth/sign-in');
     await page.getByLabel('Email').fill(TEST_USER_A.email);
     await page.getByLabel(loginLabel).fill(TEST_USER_A.password);
     await page.getByRole('button', { name: submitLabel }).click();
-    await expect(page).not.toHaveURL(/\/login/);
+    await expect(page).not.toHaveURL(/\/auth\/sign-in/);
   });
 
   test('sign-out redirects to login', async ({ page }) => {
-    await page.goto('/login');
+    await page.goto('/auth/sign-in');
     await page.getByLabel('Email').fill(TEST_USER_A.email);
     await page.getByLabel(loginLabel).fill(TEST_USER_A.password);
     await page.getByRole('button', { name: submitLabel }).click();
-    await page.waitForURL(url => !url.pathname.includes('/login'));
+    await page.waitForURL(url => !url.pathname.includes('/auth/sign-in'));
+    await page.goto('/settings');
+    await page.waitForLoadState('networkidle');
     await page.getByRole('button', { name: /Cerrar sesión|Logout|Sign out/i }).click();
-    await expect(page).toHaveURL(/\/login/);
+    await expect(page).toHaveURL(/\/auth\/sign-in/);
   });
 
   test('unauthenticated access redirects to login', async ({ page }) => {
     await page.goto('/');
-    await expect(page).toHaveURL(/\/login/);
+    await expect(page).toHaveURL(/\/auth\/sign-in$/);
   });
 
   test('session persists on page reload', async ({ page }) => {
-    await page.goto('/login');
+    await page.goto('/auth/sign-in');
     await page.getByLabel('Email').fill(TEST_USER_A.email);
     await page.getByLabel(loginLabel).fill(TEST_USER_A.password);
     await page.getByRole('button', { name: submitLabel }).click();
-    await page.waitForURL(url => !url.pathname.includes('/login'));
+    await page.waitForURL(url => !url.pathname.includes('/auth/sign-in'));
     const currentUrl = page.url();
     await page.reload();
     await page.waitForLoadState('networkidle');
@@ -50,11 +52,11 @@ test.describe('Authentication', () => {
   });
 
   test('invalid credentials shows error', async ({ page }) => {
-    await page.goto('/login');
+    await page.goto('/auth/sign-in');
     await page.getByLabel('Email').fill('nonexistent@example.com');
     await page.getByLabel(loginLabel).fill('wrongpassword');
     await page.getByRole('button', { name: submitLabel }).click();
-    await expect(page).toHaveURL(/\/login/);
+    await expect(page).toHaveURL(/\/auth\/sign-in$/);
     await expect(page.getByText(/invalid|incorrect|error|no se encontró|credenciales/i).first()).toBeVisible({ timeout: 10_000 });
   });
 });

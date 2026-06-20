@@ -10,11 +10,11 @@ const TEST_USER_A = {
 };
 
 async function loginAsUserA(page: ReturnType<typeof test.extend>) {
-  await page.goto('/login');
+  await page.goto('/auth/sign-in');
   await page.getByLabel('Email').fill(TEST_USER_A.email);
   await page.getByLabel('Contraseña', { exact: true }).or(page.getByLabel('Password', { exact: true })).fill(TEST_USER_A.password);
   await page.getByRole('button', { name: /Iniciar sesión|Sign in|Entrar/i }).click();
-  await page.waitForURL(url => !url.pathname.includes('/login'));
+  await page.waitForURL(url => !url.pathname.includes('/auth/sign-in'));
 }
 
 test.describe('Tomas Lifecycle', () => {

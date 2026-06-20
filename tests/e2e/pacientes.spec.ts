@@ -10,31 +10,34 @@ const TEST_USER_A = {
 };
 
 async function loginAsUserA(page: ReturnType<typeof test.extend>) {
-  await page.goto('/login');
+  await page.goto('/auth/sign-in');
   await page.getByLabel('Email').fill(TEST_USER_A.email);
   await page.getByLabel('Contraseña', { exact: true }).or(page.getByLabel('Password', { exact: true })).fill(TEST_USER_A.password);
   await page.getByRole('button', { name: /Iniciar sesión|Sign in|Entrar/i }).click();
-  await page.waitForURL(url => !url.pathname.includes('/login'));
+  await page.waitForURL(url => !url.pathname.includes('/auth/sign-in'));
 }
 
 test.describe('Pacientes CRUD', () => {
   test.beforeEach(async ({ page }) => loginAsUserA(page));
 
   test('create a new paciente', async ({ page }) => {
-    await page.goto('/pacientes/new');
+    await page.goto('/pacientes');
+    await page.getByRole('button', { name: /Nuevo paciente/i }).click();
+    await expect(page.getByLabel('Nombre', { exact: true })).toBeVisible({ timeout: 5000 });
+
     const name = `[E2E-TEST] Paciente ${Date.now()}`;
-    await page.getByLabel('Nombre', { exact: true }).or(page.getByLabel('Name', { exact: true })).fill(name);
-    await page.getByRole('button', { name: /Guardar|Save|Crear|Create/i }).click();
+    await page.getByLabel('Nombre', { exact: true }).fill(name);
+    await page.getByRole('button', { name: /Crear paciente/i }).click();
     await expect(page.getByText(name)).toBeVisible({ timeout: 10_000 });
   });
 
   test('list existing pacientes', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/pacientes');
     await expect(page.locator('body')).toBeVisible();
   });
 
   test('edit a paciente', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/pacientes');
     const editBtn = page.getByRole('button', { name: /Editar|Edit/i }).first();
     if (await editBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await editBtn.click();
@@ -47,10 +50,13 @@ test.describe('Pacientes CRUD', () => {
   });
 
   test('delete a paciente', async ({ page }) => {
-    await page.goto('/pacientes/new');
+    await page.goto('/pacientes');
+    await page.getByRole('button', { name: /Nuevo paciente/i }).click();
+    await expect(page.getByLabel('Nombre', { exact: true })).toBeVisible({ timeout: 5000 });
+
     const name = `[E2E-TEST] DeleteMe ${Date.now()}`;
-    await page.getByLabel('Nombre', { exact: true }).or(page.getByLabel('Name', { exact: true })).fill(name);
-    await page.getByRole('button', { name: /Guardar|Save|Crear|Create/i }).click();
+    await page.getByLabel('Nombre', { exact: true }).fill(name);
+    await page.getByRole('button', { name: /Crear paciente/i }).click();
     await expect(page.getByText(name)).toBeVisible({ timeout: 10_000 });
 
     const deleteBtn = page.getByRole('button', { name: /Eliminar|Delete/i }).first();
