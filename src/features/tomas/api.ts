@@ -30,7 +30,7 @@ export async function listTodayTomas(
 
   const { data, error } = await client
     .from('tomas')
-    .select('*')
+    .select('*, schedules(medication_id)')
     .eq('paciente_id', pacienteId)
     .gte('scheduled_at', start.toISOString())
     .lt('scheduled_at', end.toISOString())

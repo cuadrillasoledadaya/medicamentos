@@ -5,6 +5,7 @@ import { useCurrentContext } from '../features/plan-temporada/hooks';
 import { useMedications } from '../features/medications/hooks';
 import { AdherenceChart } from '../features/adherence/AdherenceChart';
 import { StockAlertBanner } from '../features/stock/StockAlertBanner';
+import { DashboardBanner } from '../features/reminders/DashboardBanner';
 import { useNavigate } from 'react-router-dom';
 
 export default function DashboardPage() {
@@ -33,6 +34,11 @@ export default function DashboardPage() {
   return (
     <div>
       <h1 style={styles.title}>Contexto actual</h1>
+
+      {/* Today's pending tomas banner */}
+      {activePacienteId && (
+        <DashboardBanner pacienteId={activePacienteId} />
+      )}
 
       {context?.activeTemporada && (
         <div style={styles.section}>
