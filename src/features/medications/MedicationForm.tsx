@@ -1,10 +1,12 @@
 // MedicationForm — react-hook-form + Zod for creating/editing a medication.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useCreateMedication, useUpdateMedication } from './hooks';
+import { useCreateMedication, useUpdateMedication, useMedications } from './hooks';
+import { useCheckInteraction } from '../interactions/hooks';
+import { InteractionAlert } from '../interactions/InteractionAlert';
 import type { Medication } from '../../lib/database.types';
 
 const DOSE_UNITS = [
@@ -62,6 +64,27 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
       low_stock_threshold: medication?.low_stock_threshold ?? 7,
     },
   });
+
+  const { data: existingMeds } = useMedications(pacienteId);
+
+  const activeMedNames = existingMeds
+    ?.filter((m) => m.active && (!medication || m.id !== medication.id))
+    .map((m) => m.name) ?? [];
+
+  const watchedName = watch('name');
+  const { data: interactionWarnings } = useCheckInteraction(
+    watchedName ?? '',
+    activeMedNames,
+  );
+
+  const [showInteractions, setShowInteractions] = useState(false);
+
+  // Show interaction alert when name changes and there are warnings
+  useEffect(() => {
+    if (interactionWarnings && interactionWarnings.length > 0 && !medication) {
+      setShowInteractions(true);
+    }
+  }, [interactionWarnings, medication]);
 
   const selectedUnit = watch('dose_unit');
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -126,6 +149,14 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} style={styles.form}>
+      {/* Interaction alert for new medications */}
+      {!medication && showInteractions && interactionWarnings && interactionWarnings.length > 0 && (
+        <InteractionAlert
+          interactions={interactionWarnings}
+          onDismiss={() => setShowInteractions(false)}
+        />
+      )}
+
       {submitError && (
         <div style={{ padding: '0.75rem', background: '#fef2f2', color: '#dc2626', borderRadius: '4px', fontSize: '0.875rem' }}>
           <strong>Error:</strong> {submitError}
