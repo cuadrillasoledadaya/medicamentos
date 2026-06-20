@@ -11,6 +11,7 @@ const navItems = [
   { to: '/pacientes', label: 'Pacientes' },
   { to: '/medications', label: 'Medicamentos' },
   { to: '/calendar', label: 'Calendario' },
+  { to: '/adherence', label: 'Adherencia' },
   { to: '/settings', label: 'Ajustes' },
 ];
 

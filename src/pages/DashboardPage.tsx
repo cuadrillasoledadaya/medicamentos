@@ -3,6 +3,7 @@
 import { useActivePaciente } from '../stores/activePaciente';
 import { useCurrentContext } from '../features/plan-temporada/hooks';
 import { useMedications } from '../features/medications/hooks';
+import { AdherenceChart } from '../features/adherence/AdherenceChart';
 import { useNavigate } from 'react-router-dom';
 
 export default function DashboardPage() {
@@ -103,6 +104,13 @@ export default function DashboardPage() {
           <p style={{ color: '#888', fontSize: '0.875rem' }}>No hay medicamentos activos.</p>
         )}
       </div>
+
+      {activePacienteId && (
+        <div style={styles.section}>
+          <h2 style={styles.subtitle}>Adherencia (últimas 4 semanas)</h2>
+          <AdherenceChart pacienteId={activePacienteId} />
+        </div>
+      )}
     </div>
   );
 }
