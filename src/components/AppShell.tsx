@@ -13,6 +13,8 @@ const navItems = [
   { to: '/calendar', label: 'Calendario' },
   { to: '/adherence', label: 'Adherencia' },
   { to: '/stock', label: 'Stock' },
+  { to: '/vacations', label: 'Vacaciones' },
+  { to: '/retention', label: 'Retención' },
   { to: '/admin/interactions', label: 'Interacciones' },
   { to: '/settings', label: 'Ajustes' },
 ];
