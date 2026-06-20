@@ -123,3 +123,61 @@ export async function getCurrentContext(
     return { data: null, error: new Error(e.message) };
   }
 }
+
+/** Reopen a closed temporada > 90 days old with a reason.
+ *
+ * ORDER OF OPERATIONS (critical — matches DB trigger behavior from 0005):
+ * 1. INSERT a temporada_reopen_audit row FIRST (reason must be >= 10 chars)
+ * 2. THEN attempt the modification (the trigger checks for the audit row)
+ *
+ * The UI must capture the reason and INSERT the audit row BEFORE any modification.
+ */
+export async function reopenTemporada(
+  temporadaId: string,
+  reason: string,
+): Promise<{ data: { auditId: string } | null; error: Error | null }> {
+  if (reason.length < 10) {
+    return { data: null, error: new Error('El motivo debe tener al menos 10 caracteres.') };
+  }
+
+  const userId = (await supabase.auth.getUser()).data.user?.id ?? '';
+
+  // Step 1: Insert audit row FIRST (the trigger checks for this)
+  const { data: audit, error: auditError } = await client
+    .from('temporada_reopen_audit')
+    .insert([{
+      temporada_id: temporadaId,
+      user_id: userId,
+      reason,
+    }])
+    .select('id')
+    .single();
+
+  if (auditError) return { data: null, error: new Error(auditError.message) };
+
+  // Step 2: The temporada is now modifiable (trigger will allow it)
+  // The caller can now update plans/tomas as needed.
+  return { data: { auditId: (audit as { id: string }).id }, error: null };
+}
+
+/** List reopen audit entries for a temporada. */
+export async function listReopenAudit(
+  temporadaId: string,
+): Promise<{ data: any[] | null; error: Error | null }> {
+  const { data, error } = await client
+    .from('temporada_reopen_audit')
+    .select('*')
+    .eq('temporada_id', temporadaId)
+    .order('modified_at', { ascending: false });
+
+  return { data, error: error ? new Error(error.message) : null };
+}
+
+/** Check if a temporada is eligible for reopen (closed > 90 days ago). */
+export function isReopenEligible(temporada: { closed_at: string | null }): boolean {
+  if (!temporada.closed_at) return false;
+  const closedDate = new Date(temporada.closed_at);
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  return closedDate < ninetyDaysAgo;
+}

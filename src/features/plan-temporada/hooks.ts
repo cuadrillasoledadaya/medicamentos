@@ -9,6 +9,8 @@ import {
   listPlans,
   createPlan,
   getCurrentContext,
+  reopenTemporada,
+  listReopenAudit,
 } from './api';
 
 export function useTemporadas(pacienteId: string) {
@@ -95,5 +97,31 @@ export function useCurrentContext(pacienteId: string) {
       return data;
     },
     enabled: !!pacienteId,
+  });
+}
+
+export function useReopenTemporada() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ temporadaId, reason }: { temporadaId: string; reason: string }) =>
+      reopenTemporada(temporadaId, reason),
+    onSuccess: ({ data, error }) => {
+      if (!error && data) {
+        queryClient.invalidateQueries({ queryKey: ['temporadas'] });
+      }
+    },
+  });
+}
+
+export function useReopenAudit(temporadaId: string) {
+  return useQuery({
+    queryKey: ['temporada-reopen-audit', temporadaId],
+    queryFn: async () => {
+      const { data, error } = await listReopenAudit(temporadaId);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!temporadaId,
   });
 }

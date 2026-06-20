@@ -20,6 +20,7 @@ const StockPage = lazy(() => import('./features/stock/routes'));
 const VacationPage = lazy(() => import('./features/vacation/routes'));
 const RetentionPage = lazy(() => import('./features/retention/routes'));
 const ReportsPage = lazy(() => import('./features/reports/routes'));
+const TravelPage = lazy(() => import('./features/travel/routes'));
 
 // Auth pages (eager — small and needed for auth flow)
 import { SignInPage } from './features/auth/SignInPage';
@@ -91,6 +92,10 @@ export const router = createBrowserRouter([
       {
         path: '/reports/export',
         element: SuspenseWrapper(<ReportsPage />),
+      },
+      {
+        path: '/travel',
+        element: SuspenseWrapper(<TravelPage />),
       },
     ],
   },

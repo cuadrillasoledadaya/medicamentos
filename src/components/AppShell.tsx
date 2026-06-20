@@ -16,6 +16,7 @@ const navItems = [
   { to: '/vacations', label: 'Vacaciones' },
   { to: '/retention', label: 'Retención' },
   { to: '/reports/export', label: 'Reportes' },
+  { to: '/travel', label: 'Viajes' },
   { to: '/admin/interactions', label: 'Interacciones' },
   { to: '/settings', label: 'Ajustes' },
 ];
