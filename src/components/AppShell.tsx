@@ -12,6 +12,8 @@ const navItems = [
   { to: '/medications', label: 'Medicamentos' },
   { to: '/calendar', label: 'Calendario' },
   { to: '/adherence', label: 'Adherencia' },
+  { to: '/stock', label: 'Stock' },
+  { to: '/admin/interactions', label: 'Interacciones' },
   { to: '/settings', label: 'Ajustes' },
 ];
 
