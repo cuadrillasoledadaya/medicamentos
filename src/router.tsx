@@ -21,6 +21,7 @@ const VacationPage = lazy(() => import('./features/vacation/routes'));
 const RetentionPage = lazy(() => import('./features/retention/routes'));
 const ReportsPage = lazy(() => import('./features/reports/routes'));
 const TravelPage = lazy(() => import('./features/travel/routes'));
+const NotificationSettingsPage = lazy(() => import('./features/notifications/routes'));
 
 // Auth pages (eager — small and needed for auth flow)
 import { SignInPage } from './features/auth/SignInPage';
@@ -96,6 +97,10 @@ export const router = createBrowserRouter([
       {
         path: '/travel',
         element: SuspenseWrapper(<TravelPage />),
+      },
+      {
+        path: '/notifications',
+        element: SuspenseWrapper(<NotificationSettingsPage />),
       },
     ],
   },

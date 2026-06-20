@@ -4,10 +4,25 @@ import { useState } from 'react';
 import { useNotificationSettings, useUpdateNotificationSetting } from './hooks';
 import { requestNotificationPermission, getNotificationReliability } from './scheduler';
 
-const channels = [
+/**
+ * Detect which notification channels are available based on env vars.
+ * Mirrors what notify-fallback/index.ts reads: RESEND_API_KEY, TWILIO_*.
+ */
+function getAvailableChannels(): { email: boolean; sms: boolean } {
+  return {
+    email: !!import.meta.env.VITE_RESEND_API_KEY,
+    sms: !!(
+      import.meta.env.VITE_TWILIO_ACCOUNT_SID &&
+      import.meta.env.VITE_TWILIO_AUTH_TOKEN &&
+      import.meta.env.VITE_TWILIO_FROM_NUMBER
+    ),
+  };
+}
+
+const channelDefs = [
   { key: 'in_app' as const, label: 'Notificaciones en la app', alwaysAvailable: true },
-  { key: 'email' as const, label: 'Correo electrónico', alwaysAvailable: false },
-  { key: 'sms' as const, label: 'SMS', alwaysAvailable: false },
+  { key: 'email' as const, label: 'Correo electrónico', alwaysAvailable: false, envKey: 'email' as const },
+  { key: 'sms' as const, label: 'SMS', alwaysAvailable: false, envKey: 'sms' as const },
 ];
 
 interface Props {
@@ -60,6 +75,8 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
     red: '#dc2626',
   };
 
+  const availableChannels = getAvailableChannels();
+
   return (
     <div style={{ padding: '1rem' }}>
       <h3 style={{ margin: '0 0 0.5rem' }}>Notificaciones</h3>
@@ -92,9 +109,10 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
 
       {/* Channel toggles */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        {channels.map(({ key, label, alwaysAvailable }) => {
+        {channelDefs.map(({ key, label, alwaysAvailable, envKey }) => {
           const enabled = isEnabled(key);
-          const available = alwaysAvailable || permissionStatus === 'granted';
+          const envAvailable = alwaysAvailable || (envKey ? availableChannels[envKey] : false);
+          const available = envAvailable;
 
           return (
             <label
@@ -115,7 +133,11 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
               <span>{label}</span>
               {!alwaysAvailable && (
                 <span style={{ fontSize: '0.75rem', color: '#888' }}>
-                  {enabled ? '(activo)' : '(requiere configuración)'}
+                  {available
+                    ? enabled
+                      ? '(activo)'
+                      : '(desactivado)'
+                    : '(requiere configuración del servidor)'}
                 </span>
               )}
             </label>
