@@ -28,7 +28,7 @@ test.describe('Pacientes CRUD', () => {
     const name = `[E2E-TEST] Paciente ${Date.now()}`;
     await page.getByLabel('Nombre', { exact: true }).fill(name);
     await page.getByRole('button', { name: /Crear paciente/i }).click();
-    await expect(page.getByText(name)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('list').getByText(name)).toBeVisible({ timeout: 10_000 });
   });
 
   test('list existing pacientes', async ({ page }) => {
@@ -45,7 +45,7 @@ test.describe('Pacientes CRUD', () => {
       const originalName = await nameInput.inputValue();
       await nameInput.fill(`${originalName} (edited)`);
       await page.getByRole('button', { name: /Guardar|Save/i }).click();
-      await expect(page.getByText('(edited)')).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByRole('list').getByText('(edited)')).toBeVisible({ timeout: 10_000 });
     }
   });
 
@@ -57,14 +57,14 @@ test.describe('Pacientes CRUD', () => {
     const name = `[E2E-TEST] DeleteMe ${Date.now()}`;
     await page.getByLabel('Nombre', { exact: true }).fill(name);
     await page.getByRole('button', { name: /Crear paciente/i }).click();
-    await expect(page.getByText(name)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('list').getByText(name)).toBeVisible({ timeout: 10_000 });
 
     const deleteBtn = page.getByRole('button', { name: /Eliminar|Delete/i }).first();
     if (await deleteBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await deleteBtn.click();
       const confirmBtn = page.getByRole('button', { name: /Confirmar|Confirm|Sí|Yes/i });
       if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) await confirmBtn.click();
-      await expect(page.getByText(name)).not.toBeVisible({ timeout: 10_000 });
+      await expect(page.getByRole('list').getByText(name)).not.toBeVisible({ timeout: 10_000 });
     }
   });
 

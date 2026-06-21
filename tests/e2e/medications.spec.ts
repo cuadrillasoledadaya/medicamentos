@@ -19,30 +19,94 @@ async function loginAsUserA(page: ReturnType<typeof test.extend>) {
 
 /**
  * Ensure an active paciente exists for medication tests.
- * Creates one via the UI if none is active, then selects it.
+ * Creates one via the UI if needed, then creates the required
+ * family_members row via REST API (RLS requires it for medication writes),
+ * and finally injects the ID into Zustand's localStorage.
  */
 async function ensureActivePaciente(page: ReturnType<typeof test.extend>) {
-  // Check if there's already an active paciente by going to /medications
-  await page.goto('/medications');
-  const hasForm = await page.getByRole('button', { name: /Nuevo medicamento/i }).isVisible({ timeout: 3000 }).catch(() => false);
-  if (hasForm) return; // Already has active paciente
+  const SUPABASE_URL = 'https://cmoydmfdhssxdmwqlueg.supabase.co';
+  const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNtb3lkbWZkaHNzeGRtd3FsdWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NjYzNTAsImV4cCI6MjA5NzQ0MjM1MH0.nScsu_Rx6wMkjAYKgunWHjJKV-fWEAVREcAkw';
 
-  // Need to create and select a paciente
   await page.goto('/pacientes');
-  const newBtn = page.getByRole('button', { name: /Nuevo paciente/i });
-  if (await newBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+  await page.waitForLoadState('networkidle');
+
+  // Check if there are existing pacientes
+  const selectBtn = page.getByRole('button', { name: /Seleccionar/i }).first();
+  const hasPacientes = await selectBtn.isVisible({ timeout: 5000 }).catch(() => false);
+
+  let pacienteId: string | null = null;
+
+  if (!hasPacientes) {
+    // Create a paciente first
+    const newBtn = page.getByRole('button', { name: /Nuevo paciente/i });
     await newBtn.click();
-    await page.getByLabel('Nombre', { exact: true }).fill(`[E2E-TEST] AutoPaciente ${Date.now()}`);
+    await expect(page.getByLabel('Nombre', { exact: true })).toBeVisible({ timeout: 5000 });
+    const name = `[E2E-TEST] MedPaciente ${Date.now()}`;
+    await page.getByLabel('Nombre', { exact: true }).fill(name);
     await page.getByRole('button', { name: /Crear paciente/i }).click();
-    await page.waitForTimeout(1000);
+    await expect(page.getByRole('list').getByText(name)).toBeVisible({ timeout: 10_000 });
   }
 
-  // Select the first paciente to set as active
-  const selectBtn = page.getByRole('button', { name: /Seleccionar/i }).first();
-  if (await selectBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-    await selectBtn.click();
+  // Extract a paciente ID from the nav selector's <option> value
+  // First option is the placeholder (value=""), so get the first real one
+  const options = await page.locator('select option').all();
+  for (const opt of options) {
+    const val = await opt.getAttribute('value').catch(() => '');
+    if (val && val.length > 0) {
+      pacienteId = val;
+      break;
+    }
+  }
+
+  if (!pacienteId) {
+    throw new Error('No paciente ID found in selector');
+  }
+
+  // Get the current session's access token and user ID from localStorage (Supabase auth)
+  const sessionData = await page.evaluate(() => {
+    const raw = localStorage.getItem('sb-cmoydmfdhssxdmwqlueg-auth-token');
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return {
+        accessToken: parsed.access_token ?? null,
+        userId: parsed.user?.id ?? null,
+      };
+    } catch {
+      return null;
+    }
+  });
+
+  // Create the family_members entry via REST API (needed for RLS on medications)
+  if (sessionData?.accessToken && sessionData?.userId) {
+    await page.evaluate(async ({ url, anonKey, token, pacienteId, userId }) => {
+      const res = await fetch(`${url}/rest/v1/family_members`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: anonKey,
+          Authorization: `Bearer ${token}`,
+          Prefer: 'return=representation',
+        },
+        body: JSON.stringify({
+          paciente_id: pacienteId,
+          user_id: userId,
+          role: 'cuidador_principal',
+          status: 'active',
+        }),
+      });
+      // Ignore errors — the row might already exist
+      return res.status;
+    }, { url: SUPABASE_URL, anonKey: ANON_KEY, token: sessionData.accessToken, pacienteId, userId: sessionData.userId });
+
+    // Wait a moment for the RLS cache to update
     await page.waitForTimeout(500);
   }
+
+  // Inject directly into Zustand's persist localStorage key
+  await page.evaluate((id) => {
+    localStorage.setItem('active-paciente', JSON.stringify({ state: { activePacienteId: id } }));
+  }, pacienteId);
 }
 
 test.describe('Medications CRUD', () => {
@@ -62,7 +126,19 @@ test.describe('Medications CRUD', () => {
     await page.locator('select[name="dose_unit"]').selectOption('mg');
     await page.locator('input[name="route"]').fill('Oral');
     await page.getByRole('button', { name: /Crear medicamento/i }).click();
-    await expect(page.getByText(name)).toBeVisible({ timeout: 10_000 });
+
+    // Check for submit error (RLS or validation)
+    const errorDiv = page.locator('div:has-text("Error:")').or(page.locator('text=Error desconocido'));
+    const hasError = await errorDiv.isVisible({ timeout: 3000 }).catch(() => false);
+    if (hasError) {
+      const errorText = await errorDiv.textContent();
+      console.log(`Medication form error: ${errorText}`);
+    }
+
+    // Wait for form to close (indicates successful creation)
+    await expect(page.getByLabel('Nombre', { exact: true })).not.toBeVisible({ timeout: 10_000 });
+    // Then verify the medication appears in the list
+    await expect(page.locator('ul').getByText(name)).toBeVisible({ timeout: 10_000 });
   });
 
   test('edit a medication', async ({ page }) => {
@@ -86,14 +162,17 @@ test.describe('Medications CRUD', () => {
     await page.locator('input[name="dose_value"]').fill('100');
     await page.locator('input[name="route"]').fill('Oral');
     await page.getByRole('button', { name: /Crear medicamento/i }).click();
-    await expect(page.getByText(name)).toBeVisible({ timeout: 10_000 });
+    // Wait for form to close (indicates successful creation)
+    await expect(page.getByLabel('Nombre', { exact: true })).not.toBeVisible({ timeout: 10_000 });
+    // Verify the medication appears in the list
+    await expect(page.locator('ul').getByText(name)).toBeVisible({ timeout: 10_000 });
 
     const deleteBtn = page.getByRole('button', { name: /Eliminar|Delete/i }).first();
     if (await deleteBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await deleteBtn.click();
       const confirmBtn = page.getByRole('button', { name: /Confirmar|Confirm|Sí|Yes/i });
       if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) await confirmBtn.click();
-      await expect(page.getByText(name)).not.toBeVisible({ timeout: 10_000 });
+      await expect(page.locator('ul').getByText(name)).not.toBeVisible({ timeout: 10_000 });
     }
   });
 

@@ -23,9 +23,19 @@ async function loginAsUserA(page: ReturnType<typeof test.extend>) {
 async function countOutbox(page: ReturnType<typeof test.extend>): Promise<number> {
   return page.evaluate(async () => {
     return new Promise<number>((resolve) => {
-      const request = indexedDB.open('medication-tracker');
+      const request = indexedDB.open('medication-tracker', 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains('outbox')) {
+          db.createObjectStore('outbox', { keyPath: 'id', autoIncrement: true });
+        }
+      };
       request.onsuccess = () => {
         const db = request.result;
+        if (!db.objectStoreNames.contains('outbox')) {
+          resolve(0);
+          return;
+        }
         const tx = db.transaction('outbox', 'readonly');
         const store = tx.objectStore('outbox');
         const countReq = store.count();
