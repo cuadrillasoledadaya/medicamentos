@@ -53,8 +53,14 @@ export default async function globalSetup(config: FullConfig) {
       return data.access_token;
     }, { url: URL, anonKey: ANON_KEY, email: USER_A.email, password: USER_A.password });
 
+    // Decode user A's ID from the JWT (Node.js context — Buffer is available here)
+    const userIdA = tokenA.split('.')[1]
+      ? JSON.parse(Buffer.from(tokenA.split('.')[1], 'base64').toString()).sub
+      : null;
+    if (!userIdA) throw new Error('Could not extract user ID from token');
+
     // Create test data via REST API
-    const ids = await page.evaluate(async ({ url, anonKey, token }) => {
+    const ids = await page.evaluate(async ({ url, anonKey, token, cuidadorId }) => {
       const hdrs = (tok: string) => ({
         Authorization: `Bearer ${tok}`,
         apikey: anonKey,
@@ -75,9 +81,21 @@ export default async function globalSetup(config: FullConfig) {
       const ts = Date.now();
       const ids: Record<string, string> = {};
 
-      const paciente = await post('pacientes', { name: `[E2E-RLS] Paciente ${ts}`, timezone_id: 'America/Buenos_Aires' });
+      // Decode user A's ID from the JWT so RLS pacientes_write policy passes
+      const userIdA = cuidadorId;
+
+      const paciente = await post('pacientes', { name: `[E2E-RLS] Paciente ${ts}`, timezone_id: 'America/Buenos_Aires', cuidador_id: userIdA });
       if (!paciente?.id) throw new Error(`paciente failed: ${JSON.stringify(paciente)}`);
       ids.pacientes = paciente.id;
+
+      // Create family_members row — required for RLS on medications, schedules, etc.
+      // The app's createPaciente() does this automatically, but we're using REST directly.
+      await post('family_members', {
+        paciente_id: ids.pacientes,
+        user_id: userIdA,
+        role: 'cuidador_principal',
+        status: 'active',
+      });
 
       const temporada = await post('temporadas', { paciente_id: ids.pacientes, name: `[E2E-RLS] Temporada ${ts}`, start_date: '2026-01-01', end_date: '2026-12-31' });
       if (temporada?.id) ids.temporadas = temporada.id;
@@ -110,7 +128,7 @@ export default async function globalSetup(config: FullConfig) {
       if (trip?.id) ids.patient_trip_adjustments = trip.id;
 
       return ids;
-    }, { url: URL, anonKey: ANON_KEY, token: tokenA });
+    }, { url: URL, anonKey: ANON_KEY, token: tokenA, cuidadorId: userIdA });
 
     // Login as user B
     const tokenB = await page.evaluate(async ({ url, anonKey, email, password }) => {
