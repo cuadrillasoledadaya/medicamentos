@@ -90,12 +90,14 @@ export default async function globalSetup(config: FullConfig) {
 
       // Create family_members row — required for RLS on medications, schedules, etc.
       // The app's createPaciente() does this automatically, but we're using REST directly.
-      await post('family_members', {
+      // Migration 0007 adds a bootstrap policy so the paciente owner can insert this row.
+      const familyMember = await post('family_members', {
         paciente_id: ids.pacientes,
         user_id: userIdA,
         role: 'cuidador_principal',
         status: 'active',
       });
+      if (!familyMember?.id) throw new Error(`family_members failed: ${JSON.stringify(familyMember)}`);
 
       const temporada = await post('temporadas', { paciente_id: ids.pacientes, name: `[E2E-RLS] Temporada ${ts}`, start_date: '2026-01-01', end_date: '2026-12-31' });
       if (temporada?.id) ids.temporadas = temporada.id;
