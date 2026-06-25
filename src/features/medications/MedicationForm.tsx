@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { useCreateMedication, useUpdateMedication, useMedications } from './hooks';
 import { useCheckInteraction } from '../interactions/hooks';
 import { InteractionAlert } from '../interactions/InteractionAlert';
+import { usePaciente } from '../pacientes/hooks';
+import { useCreateSchedule } from '../schedules/hooks';
 import type { Medication } from '../../lib/database.types';
 
 const DOSE_UNITS = [
@@ -15,12 +17,47 @@ const DOSE_UNITS = [
   'inyecciones', 'other',
 ];
 
+// Frequency presets. intervalHours=0 means "manual" (no auto-generation):
+// the user creates schedules one by one on the medication detail page.
+const FREQUENCY_OPTIONS = [
+  { value: 'manual', label: 'Personalizado (crear horarios manualmente)', intervalHours: 0 },
+  { value: '24', label: '1 vez al día', intervalHours: 24 },
+  { value: '12', label: 'Cada 12 horas (2 veces al día)', intervalHours: 12 },
+  { value: '8', label: 'Cada 8 horas (3 veces al día)', intervalHours: 8 },
+  { value: '6', label: 'Cada 6 horas (4 veces al día)', intervalHours: 6 },
+  { value: '4', label: 'Cada 4 horas (6 veces al día)', intervalHours: 4 },
+];
+
+const START_HOUR = 8; // First dose defaults to 08:00 local time
+
+/**
+ * Generate the daily time-of-day slots for a given interval, starting
+ * at START_HOUR and wrapping through 24h. For an 8h interval starting
+ * at 08:00 this returns ["00:00", "08:00", "16:00"]. For 6h: ["02:00",
+ * "08:00", "14:00", "20:00"]. For 24h: ["08:00"].
+ */
+function generateScheduleTimes(intervalHours: number): string[] {
+  if (intervalHours <= 0) return [];
+  const slots = new Set<number>();
+  let h = START_HOUR;
+  while (!slots.has(h)) {
+    slots.add(h);
+    h = (h + intervalHours) % 24;
+  }
+  return Array.from(slots)
+    .sort((a, b) => a - b)
+    .map((h) => `${String(h).padStart(2, '0')}:00`);
+}
+
+const ALL_DAYS_MASK = 127; // 0b1111111 = Sun..Sat
+
 const medicationSchema = z.object({
   name: z.string().min(1, 'El nombre es obligatorio'),
   dose_value: z.number().positive('La dosis debe ser mayor a 0'),
   dose_unit: z.string().min(1, 'La unidad es obligatoria'),
   dose_unit_other: z.string(),
   route: z.string().min(1, 'La vía es obligatoria'),
+  frequency: z.string(),
   frequency_hint: z.string(),
   notes: z.string(),
   stock_estimate: z.number().int().min(0),
@@ -43,6 +80,8 @@ interface MedicationFormProps {
 export function MedicationForm({ pacienteId, medication, onSuccess }: MedicationFormProps) {
   const createMutation = useCreateMedication();
   const updateMutation = useUpdateMedication();
+  const createScheduleMutation = useCreateSchedule();
+  const { data: activePaciente } = usePaciente(pacienteId);
 
   const {
     register,
@@ -58,6 +97,7 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
       dose_unit: medication?.dose_unit ?? 'mg',
       dose_unit_other: medication?.dose_unit_other ?? '',
       route: medication?.route ?? '',
+      frequency: 'manual',
       frequency_hint: medication?.frequency_hint ?? '',
       notes: medication?.notes ?? '',
       stock_estimate: medication?.stock_estimate ?? 30,
@@ -87,7 +127,9 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
   }, [interactionWarnings, medication]);
 
   const selectedUnit = watch('dose_unit');
+  const selectedFrequency = watch('frequency');
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [scheduleProgress, setScheduleProgress] = useState<string | null>(null);
 
   if (!pacienteId) {
     return (
@@ -99,6 +141,16 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
 
   const onSubmit = async (data: MedicationFormData) => {
     setSubmitError(null);
+    setScheduleProgress(null);
+
+    const frequencyOption = FREQUENCY_OPTIONS.find((opt) => opt.value === data.frequency);
+    const intervalHours = frequencyOption?.intervalHours ?? 0;
+    // frequency_hint defaults to the human-readable frequency label
+    // when the user picked a preset, otherwise the existing text.
+    const frequencyHint = intervalHours > 0
+      ? frequencyOption!.label
+      : (data.frequency_hint || null);
+
     const payload = {
       paciente_id: pacienteId,
       name: data.name,
@@ -106,7 +158,7 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
       dose_unit: data.dose_unit,
       dose_unit_other: data.dose_unit === 'other' ? data.dose_unit_other : null,
       route: data.route,
-      frequency_hint: data.frequency_hint || null,
+      frequency_hint: frequencyHint,
       notes: data.notes || null,
       stock_estimate: data.stock_estimate,
       low_stock_threshold: data.low_stock_threshold,
@@ -122,7 +174,7 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
             dose_unit: data.dose_unit,
             dose_unit_other: data.dose_unit === 'other' ? data.dose_unit_other : null,
             route: data.route,
-            frequency_hint: data.frequency_hint || null,
+            frequency_hint: frequencyHint,
             notes: data.notes || null,
             stock_estimate: data.stock_estimate,
             low_stock_threshold: data.low_stock_threshold,
@@ -133,19 +185,62 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
           return;
         }
         onSuccess?.();
-      } else {
-        const result = await createMutation.mutateAsync(payload);
-        if (result.error) {
-          setSubmitError(result.error.message);
-          return;
-        }
-        reset();
-        onSuccess?.();
+        return;
       }
+
+      // CREATE flow: insert the medication, then auto-generate schedules
+      // if a frequency preset was selected.
+      const result = await createMutation.mutateAsync(payload);
+      if (result.error) {
+        setSubmitError(result.error.message);
+        return;
+      }
+
+      if (intervalHours > 0 && activePaciente?.timezone_id) {
+        const times = generateScheduleTimes(intervalHours);
+        const timezoneId = activePaciente.timezone_id;
+        setScheduleProgress(`Generando ${times.length} horarios…`);
+
+        for (const time of times) {
+          const schedResult = await createScheduleMutation.mutateAsync({
+            medication_id: result.data!.id,
+            time_of_day: time,
+            weekday_mask: ALL_DAYS_MASK,
+            timezone_id: timezoneId,
+            notes: null,
+          });
+          if (schedResult.error) {
+            setSubmitError(
+              `Medicamento creado, pero falló la creación del horario ${time}: ${schedResult.error.message}. ` +
+              'Podés crear los horarios manualmente desde la página del medicamento.',
+            );
+            return;
+          }
+        }
+        setScheduleProgress(null);
+      } else if (intervalHours > 0 && !activePaciente?.timezone_id) {
+        // Defensive: paciente has no timezone. The form's pre-conditions
+        // should prevent this, but if we land here we surface a clear
+        // error rather than silently creating schedules with a wrong TZ.
+        setSubmitError(
+          'Medicamento creado, pero el paciente activo no tiene zona horaria definida. ' +
+          'Editá el paciente y volvé a crear el medicamento, o creá los horarios manualmente.',
+        );
+        return;
+      }
+
+      reset();
+      onSuccess?.();
     } catch (e: any) {
       setSubmitError(e?.message ?? 'Error desconocido al guardar');
     }
   };
+
+  const frequencyTimes = selectedFrequency && selectedFrequency !== 'manual'
+    ? generateScheduleTimes(
+        FREQUENCY_OPTIONS.find((o) => o.value === selectedFrequency)?.intervalHours ?? 0,
+      )
+    : [];
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} style={styles.form}>
@@ -160,6 +255,11 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
       {submitError && (
         <div style={{ padding: '0.75rem', background: '#fef2f2', color: '#dc2626', borderRadius: '4px', fontSize: '0.875rem' }}>
           <strong>Error:</strong> {submitError}
+        </div>
+      )}
+      {scheduleProgress && (
+        <div style={{ padding: '0.75rem', background: '#eff6ff', color: '#0369a1', borderRadius: '4px', fontSize: '0.875rem' }}>
+          {scheduleProgress}
         </div>
       )}
       <div style={styles.field}>
@@ -195,13 +295,28 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
       <div style={styles.field}>
         <label htmlFor="route" style={styles.label}>Vía</label>
         <input id="route" type="text" {...register('route')} style={styles.input} placeholder="Oral, sublingual, etc." />
-        {errors.route && <span style={styles.error}>{errors.route.message}</span>}
       </div>
 
-      <div style={styles.field}>
-        <label htmlFor="frequency_hint" style={styles.label}>Frecuencia</label>
-        <input id="frequency_hint" type="text" {...register('frequency_hint')} style={styles.input} placeholder="Cada 8 horas, en ayunas, etc." />
-      </div>
+      {!medication && (
+        <div style={styles.field}>
+          <label htmlFor="frequency" style={styles.label}>Frecuencia</label>
+          <select id="frequency" {...register('frequency')} style={styles.input}>
+            {FREQUENCY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          {frequencyTimes.length > 0 ? (
+            <span style={{ fontSize: '0.75rem', color: '#0ea5e9' }}>
+              Se crearán {frequencyTimes.length} horarios a las {frequencyTimes.join(', ')}
+              {' '}(todos los días, zona horaria {activePaciente?.timezone_id ?? 'del paciente'}).
+            </span>
+          ) : (
+            <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+              Sin frecuencia automática. Después podrás crear los horarios manualmente.
+            </span>
+          )}
+        </div>
+      )}
 
       <div style={styles.field}>
         <label htmlFor="notes" style={styles.label}>Notas</label>
