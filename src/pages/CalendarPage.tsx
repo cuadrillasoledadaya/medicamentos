@@ -5,11 +5,13 @@ import { useActivePaciente } from '../stores/activePaciente';
 import { useTomas } from '../features/tomas/hooks';
 import { statusColor } from '../features/tomas/intake';
 import { useNavigate } from 'react-router-dom';
+import { DayDrawer } from '../features/tomas/DayDrawer';
 
 export default function CalendarPage() {
   const { activePacienteId } = useActivePaciente();
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -78,7 +80,21 @@ export default function CalendarPage() {
           const day = i + 1;
           const tomaData = tomaCountByDay[day];
           return (
-            <div key={day} style={{ ...styles.cell, ...styles.dayCell }}>
+            <div
+              key={day}
+              style={{
+                ...styles.cell,
+                ...styles.dayCell,
+                cursor: 'pointer',
+              }}
+              onClick={() => setSelectedDate(new Date(year, month, day))}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLDivElement).style.background = '#f3f4f6';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLDivElement).style.background = '#fff';
+              }}
+            >
               <span style={styles.dayNumber}>{day}</span>
               {tomaData && (
                 <div style={styles.tomaIndicators}>
@@ -118,6 +134,12 @@ export default function CalendarPage() {
           <span style={{ ...styles.legendDot, background: statusColor('skipped') }} /> Saltada
         </span>
       </div>
+
+      <DayDrawer
+        pacienteId={activePacienteId ?? ''}
+        date={selectedDate}
+        onClose={() => setSelectedDate(null)}
+      />
     </div>
   );
 }

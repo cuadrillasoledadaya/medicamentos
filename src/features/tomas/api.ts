@@ -9,7 +9,7 @@ export async function listTomas(
   pacienteId: string,
   dateRange?: { from: string; to: string },
 ): Promise<{ data: Toma[] | null; error: Error | null }> {
-  let query = client.from('tomas').select('*').eq('paciente_id', pacienteId);
+  let query = client.from('tomas').select('*, schedules(medication_id)').eq('paciente_id', pacienteId);
 
   if (dateRange) {
     query = query.gte('scheduled_at', dateRange.from).lte('scheduled_at', dateRange.to);
