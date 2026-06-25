@@ -24,8 +24,12 @@ export function DashboardBanner({ pacienteId }: Props) {
     );
   }
 
-  const pendingTomas = (tomas ?? [])
-    .filter((t) => t.status === 'pending')
+  // Show pending tomas (need to take) and missed tomas (already past and
+  // not taken). Taken/skipped are hidden to keep the banner focused on
+  // what the user needs to act on. Sorted by scheduled time so the user
+  // can scan the day in chronological order.
+  const actionableTomas = (tomas ?? [])
+    .filter((t) => t.status === 'pending' || t.status === 'missed')
     .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
 
   // Build schedule_id → medication map
@@ -46,23 +50,35 @@ export function DashboardBanner({ pacienteId }: Props) {
         <StatusBadge />
       </div>
 
-      {pendingTomas.length === 0 ? (
+      {actionableTomas.length === 0 ? (
         <p style={{ color: '#888', fontSize: '0.875rem' }}>
           No hay tomas pendientes para hoy. ¡Todo al día!
         </p>
       ) : (
         <div style={styles.list}>
-          {pendingTomas.map((toma) => {
+          {actionableTomas.map((toma) => {
             const med = scheduleMedMap.get(toma.schedule_id);
             const time = format(new Date(toma.scheduled_at), 'HH:mm', { locale: es });
+            const isMissed = toma.status === 'missed';
 
             return (
-              <div key={toma.id} style={styles.item}>
+              <div
+                key={toma.id}
+                style={{
+                  ...styles.item,
+                  ...(isMissed ? styles.itemMissed : null),
+                }}
+              >
                 <span style={styles.time}>{time}</span>
                 <span style={styles.medName}>
                   {med?.name ?? 'Medicamento'}
                   {med?.dose_value ? ` — ${med.dose_value} ${med.dose_unit === 'other' ? med.dose_unit_other : med.dose_unit}` : ''}
                 </span>
+                {isMissed && (
+                  <span style={styles.missedBadge} title="Dosis perdida — la hora programada ya pasó">
+                    Perdida
+                  </span>
+                )}
               </div>
             );
           })}
@@ -101,11 +117,25 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #e5e7eb',
     fontSize: '0.875rem',
   },
+  itemMissed: {
+    background: '#fef2f2',
+    border: '1px solid #fecaca',
+  },
   time: {
     fontWeight: 600,
     fontVariantNumeric: 'tabular-nums',
     minWidth: '3rem',
     color: '#0369a1',
   },
-  medName: { fontWeight: 500 },
+  medName: { fontWeight: 500, flex: 1 },
+  missedBadge: {
+    padding: '0.125rem 0.5rem',
+    background: '#dc2626',
+    color: '#fff',
+    borderRadius: '999px',
+    fontSize: '0.625rem',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  },
 };
