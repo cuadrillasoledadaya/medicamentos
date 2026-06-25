@@ -30,6 +30,15 @@ export async function createPaciente(
     return { data: null, error: new Error('Not authenticated') };
   }
 
+  // The paciente insert triggers a DB-side auto-registration of the
+  // creator as cuidador_principal in family_members (see migration
+  // 0010). Previously the client tried to do this in a separate
+  // insert and silently swallowed the error if it failed, leaving
+  // the user with a paciente but no family_member row and breaking
+  // every downstream RLS check. The trigger is now the source of
+  // truth: it runs as security definer (bypasses RLS), is atomic
+  // with the paciente insert, and has ON CONFLICT DO NOTHING so it
+  // is safe against re-runs and any future client-side inserts.
   const { data, error } = await client
     .from('pacientes')
     .insert([{ ...input, cuidador_id: user.user.id }])
@@ -37,25 +46,6 @@ export async function createPaciente(
     .single();
   if (error) {
     return { data: data as Paciente | null, error: new Error(error.message) };
-  }
-
-  // Auto-register the creator as cuidador_principal in family_members.
-  // This is required by the RLS on medications / schedules / plans / tomas:
-  // those policies check is_cuidador_principal(paciente_id), which reads
-  // from family_members. Without this row, the creator cannot add any
-  // data to their own paciente even though they own it.
-  const { error: familyError } = await client
-    .from('family_members')
-    .insert([{
-      paciente_id: data.id,
-      user_id: user.user.id,
-      role: 'cuidador_principal',
-      status: 'active',
-    }]);
-  if (familyError) {
-    // Surface a warning but don't roll back the paciente — the user can
-    // re-run the backfill SQL to fix the missing family_member row.
-    console.warn('createPaciente: failed to create family_member row', familyError);
   }
 
   return { data: data as Paciente | null, error: null };
