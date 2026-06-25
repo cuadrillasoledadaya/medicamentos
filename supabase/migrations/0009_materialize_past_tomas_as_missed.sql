@@ -110,19 +110,17 @@ begin
         on conflict (schedule_id, scheduled_at) do nothing;
         v_skipped_vacation := v_skipped_vacation + 1;
       else
-        -- Normal: insert with the determined status.
+        -- Normal: insert with the determined status. v_status is text
+        -- (so we can compare against 'missed' / 'pending' literals),
+        -- so cast to the intake_status enum when writing.
         insert into tomas (
           schedule_id, paciente_id, scheduled_at, status, registered_by
         ) values (
           v_schedule.schedule_id, v_schedule.paciente_id, v_target_ts,
-          v_status, v_schedule.cuidador_id
+          v_status::intake_status, v_schedule.cuidador_id
         )
         on conflict (schedule_id, scheduled_at) do nothing;
-        if v_status = 'missed' then
-          v_created := v_created + 1;
-        else
-          v_created := v_created + 1;
-        end if;
+        v_created := v_created + 1;
       end if;
     end loop;
   end loop;
