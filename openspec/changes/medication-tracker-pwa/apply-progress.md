@@ -50,7 +50,7 @@ Base for the next PR is `feat/medication-pr6c-travel-reopen`.
 - **T-010**: `src/features/medications/{routes.tsx,MedicationList,MedicationForm,hooks,validation}.{tsx,ts}`, `src/lib/repositories/medications.ts`. Includes the clickable list (`fe9f091`), delete button (`6aa73ef`), delete-error display (`937eab2`), and create/update error display (`9c7fe21`).
 - **T-011**: `src/features/schedules/{routes.tsx,ScheduleList,ScheduleForm,hooks,validation}.{tsx,ts}`, `src/lib/repositories/schedules.ts`. Weekday bitfield encoding.
 - **T-012**: `src/features/plans/{routes.tsx,TemporadaList,TemporadaForm,PlanList,PlanForm,hooks,validation}.{tsx,ts}`, `src/lib/repositories/{temporadas,plans}.ts`. Permanent vs seasonal plans, current-context resolver.
-- **T-013**: `src/features/intake/{routes.tsx,TomaList,TomaActions,TomaStatus,hooks,validation}.{tsx,ts}`, `src/lib/repositories/tomas.ts`. State machine `pending → taken_on_time/taken_late/skipped/missed`, 15-min tolerance, snooze, idempotent upsert, outbox-wired mutations, 7-day backfill window.
+- **T-013**: `src/features/intake/{routes.tsx,TomaList,TomaActions,TomaStatus,hooks,validation}.{tsx,ts}`, `src/lib/repositories/tomas.ts`. State machine `awaiting → taken_on_time/taken_late/skipped/missed`, 15-min tolerance, snooze, idempotent upsert, outbox-wired mutations, 7-day backfill window.
 
 ### Phase 4 — Reminder Pipeline (T-014..T-016)
 
@@ -90,7 +90,7 @@ Base for the next PR is `feat/medication-pr6c-travel-reopen`.
 | `0003_notify_fallback_trigger.sql` | NOT applied | the trigger inside was the one dropped manually |
 | `0004_pg_cron_toma_materialization.sql` | applied | in-DB cron + `materialize_tomas(days_ahead)` SQL function |
 | `0005_fix_tomas_immutability_trigger.sql` | applied | `CREATE OR REPLACE` of the trigger function |
-| `0006_adherence_view.sql` | **pending user apply** | `CREATE OR REPLACE VIEW v_adherence_28d` |
+| `0006_adherence_view.sql` | **awaiting user apply** | `CREATE OR REPLACE VIEW v_adherence_28d` |
 
 ## Edge Functions Deployed
 
@@ -116,7 +116,7 @@ Base for the next PR is `feat/medication-pr6c-travel-reopen`.
 
 **PR 7a — Settings & Polish UI** (`feat/medication-pr7a-settings`, 2 commits, ~527 lines):
 - **T-025**: `src/features/notifications/{routes.tsx,MedicationOverrideList.tsx}` + amend `NotificationSettingsForm.tsx`. Per-paciente channel toggles with env-var detection (`VITE_RESEND_API_KEY`, `VITE_TWILIO_*`) — unavailable channels grayed out with "(requiere configuración del servidor)". Per-medication override list with toggles for each active medication. `/notifications` route wired in router. **Note**: Most of the notification infrastructure (api.ts, hooks.ts, scheduler.ts, NotificationPermissionPrompt.tsx) was already implemented in prior work — T-025 filled the gaps: env-var detection, medication override UI, and routing.
-- **T-026**: `src/features/reminders/{StatusBadge,DashboardBanner,utils}.{tsx,ts}`. StatusBadge: green (desktop/SW), yellow (iOS PWA), red (permission denied). DashboardBanner: shows today's pending tomas sorted by time, embedded in DashboardPage. iOS detection via `navigator.standalone` + UA sniff. Extended `listTodayTomas` API to include `schedules(medication_id)` join for medication name resolution.
+- **T-026**: `src/features/reminders/{StatusBadge,DashboardBanner,utils}.{tsx,ts}`. StatusBadge: green (desktop/SW), yellow (iOS PWA), red (permission denied). DashboardBanner: shows today's awaiting tomas sorted by time, embedded in DashboardPage. iOS detection via `navigator.standalone` + UA sniff. Extended `listTodayTomas` API to include `schedules(medication_id)` join for medication name resolution.
 - **T-027**: `src/hooks/useTheme.ts` + amend `src/pages/SettingsPage.tsx`. Theme toggle via `localStorage` + `document.documentElement.classList` (no external library). Account info shows current user email + truncated ID. Logout button wired to `useSignOut` hook. Locale section placeholder (Spanish v1).
 
 ### Phase 9 — Tests & Config (T-028)
@@ -134,13 +134,13 @@ Base for the next PR is `feat/medication-pr6c-travel-reopen`.
 - **Commit 2** (`d4013e0`): `tests/e2e/{offline,rls}.spec.ts` + `tests/e2e/README.md`. Offline test: disable network → queue toma in IDB outbox → reconnect → verify sync. RLS test: creates data as user A across 15 tables, signs in as user B, verifies SELECT returns empty and INSERT/UPDATE/DELETE are rejected for all tables. `tests/e2e/README.md`: test user setup, run commands, cleanup SQL. 9 tests.
 - **Total: 26 E2E tests across 6 spec files.** `pnpm playwright test --list` passes. `pnpm tsc --noEmit` passes at HEAD.
 - **RLS test approach**: Uses Supabase REST API from `page.evaluate()` with the user's session token. Creates test data via POST requests, then attempts cross-user access via GET/PATCH/DELETE. All 15 RLS-protected tables covered (interactions excluded — any-auth read by design).
-- **Discovery**: The `temporada_reopen_audit` RLS policy references `is_cuidador_principal(temporada_id)` which passes a UUID to a function expecting a `paciente_id` — this may cause the policy to fail silently. The RLS test will catch this if the test users exist.
+- **Discovery**: The `temporada_reopen_audit` RLS policy references `is_cuidador_principal(temporada_id)` which passes a UUID to a function expecting a `paciente_id` — this may cause the policy to errors silently. The RLS test will catch this if the test users exist.
 
 ### Phase 10 — Strict TDD Activation (T-030)
 
 **PR 7d — Flip strict_tdd** (`feat/medication-pr7d-strict-tdd`, 1 commit, `ef7c7ff`):
 - **`openspec/config.yaml`** (untracked, local artifact): `testing.strict_tdd: false → true`. `apply.tdd: false → true`, `apply.test_command: "" → "pnpm vitest run"`. `verify.test_command: "" → "pnpm vitest run && pnpm exec playwright test"`, `verify.build_command: "" → "pnpm build"`, `verify.coverage_threshold: 0 → 60`. Filled `testing.runner` (vitest 4.x), `testing.layers` (unit/integration via vitest, e2e via playwright), `testing.coverage` (v8, threshold 60), `testing.quality` (linter, type-checker, formatter).
-- **`README.md`** (committed, `ef7c7ff`): updated status table — all 7 PRs marked Done with branch references. Added "Testing" section: test runner matrix, E2E test-user setup steps, TDD workflow contract, pending manual steps (0006 migration + test users).
+- **`README.md`** (committed, `ef7c7ff`): updated status table — all 7 PRs marked Done with branch references. Added "Testing" section: test runner matrix, E2E test-user setup steps, TDD workflow contract, awaiting manual steps (0006 migration + test users).
 - **Engram obs #157** (`sdd/medicamentos/testing-capabilities`): refreshed with current runner, framework, layer availability, E2E setup, test-user requirements, and TDD enforcement contract.
 - **From this point forward**: `strict-tdd.md` module in sdd-apply skill is active. Every new task must follow RED-GREEN-REFACTOR with a TDD Cycle Evidence table in apply-progress.
 
@@ -150,14 +150,14 @@ Base for the next PR is `feat/medication-pr6c-travel-reopen`.
 - **`tests/e2e/auth.spec.ts`**: Fixed `/login` → `/auth/sign-in` URL patterns (router redirects `/login` → `/auth/sign-in`). Added `await page.goto('/settings')` before clicking logout button (logout only appears on Settings page).
 - **`tests/e2e/medications.spec.ts`**: Fixed `/medications/new` → `/medications` + "Nuevo medicamento" button click (form is toggled, not a separate route). Added `ensureActivePaciente()` helper that creates and selects a paciente via UI before medication tests.
 - **`tests/e2e/pacientes.spec.ts`**: Fixed `/pacientes/new` → `/pacientes` + "Nuevo paciente" button click (same pattern as medications).
-- **`tests/e2e/offline.spec.ts`**: Fixed `outboxCount` variable scoping bug (was declared inside `if` block but referenced outside). Extracted `countOutbox()` helper function. Restructured flow: capture baseline before offline, compare after reconnect.
+- **`tests/e2e/offline.spec.ts`**: Fixed `outboxCount` variable scoping bug (was declared inside `if` gate but referenced outside). Extracted `countOutbox()` helper function. Restructured flow: capture baseline before offline, compare after reconnect.
 - **`tests/e2e/rls.spec.ts`**: Replaced broken `test.beforeAll(async ({ page }) => ...)` (Playwright doesn't support `page` fixture in `beforeAll`) with `tests/e2e/global-setup.ts` that creates test data via REST API once before all tests. RLS tests read setup from `tests/e2e/.artifacts/rls-setup.json`. Graceful skip when test users don't exist.
 - **`tests/e2e/tomas.spec.ts`**: Fixed `/login` → `/auth/sign-in` in login helper.
 - **`playwright.config.ts`**: Added `globalSetup: './tests/e2e/global-setup.ts'`.
 - **`.gitignore`**: Added `tests/e2e/.artifacts/`.
-- **Result**: 12/26 pass, 4 skipped (RLS — test users missing), 10 fail (all auth-dependent — test users missing).
+- **Result**: 12/26 pass, 4 skipped (RLS — test users missing), 10 errors (all auth-dependent — test users missing).
 - **`pnpm tsc --noEmit`**: passes at HEAD.
-- **Discovery**: Test users `e2e-test-a@medicamentos.test` / `e2e-test-b@medicamentos.test` do NOT exist in the live Supabase project. All auth-dependent tests fail with `invalid_credentials`. Users must be created manually via Supabase Dashboard (see `tests/e2e/README.md` step 2).
+- **Discovery**: Test users `e2e-test-a@medicamentos.test` / `e2e-test-b@medicamentos.test` do NOT exist in the live Supabase project. All auth-dependent tests errors with `invalid_credentials`. Users must be created manually via Supabase Dashboard (see `tests/e2e/README.md` step 2).
 
 ## Remaining Work
 
