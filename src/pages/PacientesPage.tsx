@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { usePacientes } from '../features/pacientes/hooks';
+import { usePacientes, useDeletePaciente } from '../features/pacientes/hooks';
 import { PacienteForm } from '../features/pacientes/PacienteForm';
 import { FamilyPanel } from '../features/family/FamilyPanel';
 import { useActivePaciente } from '../stores/activePaciente';
@@ -13,6 +13,7 @@ export default function PacientesPage() {
   const navigate = useNavigate();
   const [showForm, setShowForm] = useState(false);
   const [selectedPacienteId, setSelectedPacienteId] = useState<string | null>(null);
+  const deletePaciente = useDeletePaciente();
 
   if (isLoading) return <p style={{ color: '#888' }}>Cargando pacientes...</p>;
 
@@ -62,6 +63,26 @@ export default function PacientesPage() {
                   style={styles.familyBtn}
                 >
                   {selectedPacienteId === p.id ? 'Ocultar' : 'Familiares'}
+                </button>
+                <button
+                  onClick={() => {
+                    if (window.confirm(`¿Eliminar a "${p.name}"? Esta acción borra también sus medicamentos, horarios, tomas y registros familiares. No se puede deshacer.`)) {
+                      deletePaciente.mutate(p.id, {
+                        onError: (e) => {
+                          alert(`Error al eliminar: ${e?.message ?? 'desconocido'}`);
+                        },
+                        onSuccess: () => {
+                          if (activePacienteId === p.id) {
+                            setActivePaciente(null);
+                          }
+                        },
+                      });
+                    }
+                  }}
+                  style={styles.deleteBtn}
+                  aria-label={`Eliminar ${p.name}`}
+                >
+                  Eliminar
                 </button>
               </div>
             </li>
@@ -127,6 +148,15 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#f3f4f6',
     color: '#374151',
     border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.75rem',
+  },
+  deleteBtn: {
+    padding: '0.25rem 0.5rem',
+    background: '#dc2626',
+    color: '#fff',
+    border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',
     fontSize: '0.75rem',

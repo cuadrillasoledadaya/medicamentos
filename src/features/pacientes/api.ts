@@ -73,3 +73,11 @@ export async function updatePaciente(
     .single();
   return { data: data as Paciente | null, error: error ? new Error(error.message) : null };
 }
+
+export async function deletePaciente(id: string): Promise<{ data: null; error: Error | null }> {
+  const { error } = await client
+    .from('pacientes')
+    .delete()
+    .eq('id', id);
+  return { data: null, error: error ? new Error(error.message) : null };
+}

@@ -1,7 +1,7 @@
 // React Query hooks for pacientes operations.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { listPacientes, getPaciente, createPaciente, updatePaciente } from './api';
+import { listPacientes, getPaciente, createPaciente, updatePaciente, deletePaciente } from './api';
 
 export function usePacientes() {
   return useQuery({
@@ -50,6 +50,19 @@ export function useUpdatePaciente() {
       if (!error && data) {
         queryClient.invalidateQueries({ queryKey: ['pacientes', 'list'] });
         queryClient.invalidateQueries({ queryKey: ['pacientes', data.id] });
+      }
+    },
+  });
+}
+
+export function useDeletePaciente() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => deletePaciente(id),
+    onSuccess: ({ error }) => {
+      if (!error) {
+        queryClient.invalidateQueries({ queryKey: ['pacientes'] });
       }
     },
   });
