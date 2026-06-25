@@ -238,3 +238,55 @@ From ESLint v9.0.0, the default configuration file is now eslint.config.js.
 | `pnpm tsc --noEmit` | ✅ PASS | No output = no errors (confirmed in original verify report; unchanged by remediation commits). |
 
 **All 3 CRITICAL findings resolved. Recommendation: `reverify`.**
+
+---
+
+## Verify Pass 2 (2026-06-25)
+
+Independent re-verification by sdd-verify after the 4-commit remediation pass on `feat/medication-pr7e-test-fixes`. **HEAD**: `e0a3640e01cbd289d04761eee05a99c22f4215d8` (`docs(sdd): append remediation pass to verify-report (C-1/2/3 resolved)`).
+
+### C-1 / C-2 / C-3 Status
+
+| Finding | Status | Evidence (independently verified) |
+|---|---|---|
+| **C-1** — TDD Cycle Evidence table missing from `apply-progress.md` | ✅ resolved | `## TDD Cycle Evidence` table now present at `apply-progress.md` lines 193-228, 30 rows (T-001..T-030), columns: Task / Title / RED / GREEN / TRIANGULATE / SAFETY NET / REFACTOR / Evidence. T-001..T-027 marked `N/A (pre-flip, T-030 enabled strict_tdd)` — semantically correct per `strict-tdd-verify.md` (these tasks pre-date the TDD flip). T-028, T-029, T-030 filled with explicit `✅` markers referencing real test files and counts. T-030 marks RED / TRIANGULATE / SAFETY NET as `N/A` because it is a config-only change. |
+| **C-2** — `pnpm vitest run` fails (e2e discovery) | ✅ resolved | `vitest.config.ts` lines 16-21 now include `exclude: ['**/node_modules/**', 'tests/e2e/**', 'playwright-report/**', 'test-results/**']`. Independent run picks up only `src/lib/{time,outbox,validation,repositories}/*.test.ts` (4 files, 61 tests). No `tests/e2e/**` files discovered. |
+| **C-3** — `pnpm lint` fails (no flat config) | ✅ resolved | `eslint.config.js` (112 lines) now exists at repo root. Valid ESLint v10 flat config: 8 config blocks (`ignores` + `js.configs.recommended` + TS + React JSX + service-worker + web-worker + react-hooks + tests). Loads successfully via `import('./eslint.config.js')`. Uses `@eslint/js`, `@typescript-eslint` (recommended + recommended-type-checked), `eslint-plugin-react-hooks`, and `globals`. |
+
+### Independent Quality Gate Results
+
+All four commands re-run independently by sdd-verify executor at 2026-06-25 ~23:08 UTC+2 (after `git checkout e0a3640`):
+
+| Command | Result | Independent Counts | Notes |
+|---|---|---|---|
+| `pnpm vitest run` | ✅ PASS | **4 test files, 61 tests passed, 0 errors, 9.49s** | Only `src/lib/{validation/schemas.test.ts (27), repositories/tomas.test.ts (19), time/formatInTz.test.ts (10), outbox/outbox.test.ts (5)}` discovered. `tests/e2e/**` correctly excluded. |
+| `pnpm tsc --noEmit` | ✅ PASS | **clean, exit 0, no output** | No type errors. |
+| `pnpm lint` | ✅ PASS | **0 errors, 56 warnings, exit 0** | All 56 warnings are pre-existing code-quality issues (`@typescript-eslint/no-explicit-any` in vacation/stock/pdf features, `@typescript-eslint/no-unused-vars` in `src/lib/idb.ts:119` and `tests/e2e/global-setup.ts:34`, `react-hooks/incompatible-library` / `set-state-in-effect` / `purity` warnings in `VacationForm.tsx`). No new warnings introduced by the 4 remediation commits. |
+| `pnpm exec playwright test` | ✅ PASS | **26/26 passed, 41.0s** | All 6 spec files green: `auth.spec.ts` (5/5), `pacientes.spec.ts` (5/5), `medications.spec.ts` (4/4), `tomas.spec.ts` (6/6), `offline.spec.ts` (2/2), `rls.spec.ts` (4/4). No skips, no retries. |
+
+### Config File Verification
+
+- **`vitest.config.ts`** — 29 lines, valid TypeScript. Lines 16-21 contain the e2e exclude block. Confirmed by reading the file directly.
+- **`eslint.config.js`** — 112 lines, valid ESM flat config. 8 config blocks. Verified loadable: `node -e "import('./eslint.config.js')"` returns successfully with `default` export and `Config blocks: 8`.
+- **`apply-progress.md`** — 228 lines total. `## TDD Cycle Evidence` table spans lines 193-228 (30 task rows). Confirmed by counting `^| T-0` patterns = 30.
+
+### TDD Table Format Audit (per `strict-tdd-verify.md`)
+
+| Check | Result | Details |
+|---|---|---|
+| TDD Evidence table present | ✅ | Section `## TDD Cycle Evidence` at line 193. |
+| All 30 tasks have rows | ✅ | T-001..T-030 all present (30 rows counted). |
+| Pre-flip tasks marked `N/A` | ✅ | T-001..T-027 marked `N/A (pre-flip, T-030 enabled strict_tdd)` for RED, `N/A (pre-flip)` for GREEN/TRIANGULATE, `N/A (new)` for SAFETY NET — semantically equivalent and acceptable per the strict-tdd module. |
+| Post-flip tasks have explicit columns | ✅ | T-028 RED ✅, GREEN ✅, TRIANGULATE ✅, SAFETY NET `N/A (new)`, REFACTOR ✅. T-029 same pattern. T-030 GREEN ✅, REFACTOR ✅, rest `N/A` (config change). |
+| GREEN claims cross-referenced | ✅ | T-028 GREEN claims 61/61 pass — confirmed by independent run. T-029 GREEN claims 26/26 pass — confirmed by independent run. |
+| Triangulation claimed with case counts | ✅ | T-028: 3+ cases per behavior. T-029: 4-6 scenarios per spec file. |
+
+### Cross-Reference: Prior Findings (W-1..W-7, S-1..S-5)
+
+The WARNINGs (W-1..W-7) and SUGGESTIONs (S-1..S-5) from the original verify pass remain **unchanged** in this re-verify. They are pre-existing gaps in test coverage breadth (37/52 spec scenarios lack dedicated tests) and minor code-quality issues. They are **not archive-blockers** per the original pass's Recommendation section ("WARNINGs W-1..W-7 can be addressed in subsequent changes; they are not archive-blockers").
+
+### Final Verdict
+
+**`pass`** — All four quality gates pass independently on the second pass. All three CRITICAL findings (C-1, C-2, C-3) from the first verify pass are demonstrably resolved. The 56 pre-existing lint warnings and the 7 prior WARNING / 5 SUGGESTION findings remain on record but are not regressions and not archive-blockers.
+
+**`sdd-archive` is now unblocked.** The change `medication-tracker-pwa` is ready to proceed to the archive phase.
