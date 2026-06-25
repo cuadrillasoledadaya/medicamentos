@@ -87,6 +87,7 @@ test.describe('Medications CRUD', () => {
   });
 
   test('delete a medication', async ({ page }) => {
+    page.on('dialog', dialog => dialog.accept());
     await page.goto('/medications');
     await page.getByRole('button', { name: /Nuevo medicamento/i }).click();
     await expect(page.getByLabel('Nombre', { exact: true })).toBeVisible({ timeout: 5000 });
