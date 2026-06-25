@@ -5,6 +5,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useMedication } from '../features/medications/hooks';
 import { useSchedules } from '../features/schedules/hooks';
 import { useActivePaciente } from '../stores/activePaciente';
+import { usePaciente } from '../features/pacientes/hooks';
 import { ScheduleForm } from '../features/schedules/ScheduleForm';
 import { ScheduleList } from '../features/schedules/ScheduleList';
 import { PhotoUpload } from '../features/medications/PhotoUpload';
@@ -13,6 +14,7 @@ import { useUpdateMedication } from '../features/medications/hooks';
 export default function MedicationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { activePacienteId } = useActivePaciente();
+  const { data: activePaciente } = usePaciente(activePacienteId ?? '');
   const { data: medication, isLoading: medLoading } = useMedication(id ?? '');
   const { data: schedules, isLoading: schedLoading } = useSchedules(id ?? '');
   const [showScheduleForm, setShowScheduleForm] = useState(false);
@@ -61,7 +63,7 @@ export default function MedicationDetailPage() {
           <div style={styles.formContainer}>
             <ScheduleForm
               medicationId={id}
-              defaultTimezone={activePacienteId ? undefined : 'America/Buenos_Aires'}
+              defaultTimezone={activePaciente?.timezone_id ?? 'America/Buenos_Aires'}
               onSuccess={() => setShowScheduleForm(false)}
             />
           </div>
