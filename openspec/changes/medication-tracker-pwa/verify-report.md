@@ -4,12 +4,20 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **fail** |
+| **Status** | **pass** (after 2 passes — see history below) |
 | **Date** | 2026-06-25 |
 | **Branch** | `feat/medication-pr7e-test-fixes` |
-| **HEAD** | `feaf659 test(e2e): fix dialog handler and RLS UPDATE/DELETE assertions` |
+| **HEAD** | `5ddae7d docs(sdd): append verify pass 2 to verify-report` |
 | **Strict TDD** | ACTIVE (`openspec/config.yaml` → `testing.strict_tdd: true`) |
-| **Verdict** | **FAIL** — see Findings. Implementation is functional (26/26 E2E green, 61/61 unit tests green), but strict-TDD evidence table is missing, the configured `test_command` is broken, and `pnpm lint` is broken. Recommend `remediate-and-reverify`. |
+| **Verdict** | **PASS** — all four quality gates green (61/61 unit, 26/26 e2e, lint 0 errors, typecheck clean). All 3 CRITICAL findings from pass 1 (C-1 missing TDD evidence table, C-2 vitest config, C-3 eslint flat config) resolved by 5 remediation commits on the same branch. WARNINGs (W-1..W-7) and SUGGESTIONs (S-1..S-5) from pass 1 are pre-existing test-coverage breadth gaps; not archive-blockers. **sdd-archive is unblocked.** |
+
+> **Report history** — This report was generated across two verify passes on the same branch:
+> - **Pass 1** (this file's Per-Spec / Per-Task / Findings / Test Suite sections below): verdict `fail`, surfaced 3 CRITICALs (C-1/C-2/C-3) + 7 WARNINGs + 5 SUGGESTIONs.
+> - **Remediation pass**: 4 commits (`351ea25`, `aba42b9`, `b0bb534`, `e0a3640`) on `feat/medication-pr7e-test-fixes` fixed all 3 CRITICALs.
+> - **Pass 2** (this file's `## Verify Pass 2` section near the end): verdict `pass`, independently re-ran all four quality gates and confirmed C-1/C-2/C-3 resolved.
+> - **Pass 2 wrap-up commit**: `5ddae7d` on `feat/medication-pr7e-test-fixes` (this current HEAD).
+>
+> The Per-Spec / Per-Task / Findings / Test Suite sections below document **pass 1** verbatim — they are the audit trail and are preserved untouched. Read the `## Verify Pass 2` section for the final verdict.
 
 ---
 
