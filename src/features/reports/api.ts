@@ -38,11 +38,16 @@ export async function fetchReportData(
 
     if (mErr) return { data: null, error: new Error(mErr.message) };
 
-    // Fetch active schedules with medication names
+    // Fetch active schedules with medication names. Use .in() (the method),
+    // NOT .eq('medication_id', 'in', [...]) — the string 'in' would be sent
+    // as a value, not as an operator, and Postgres would fail to parse it
+    // as a UUID ("invalid input syntax for type uuid: 'in'"). When the
+    // medications array is empty, .in() with an empty array returns no
+    // rows, which is the correct behavior.
     const { data: schedules, error: sErr } = await client
       .from('schedules')
       .select('*, medications(name)')
-      .eq('medication_id', 'in', ((medications as Medication[]) ?? []).map((m) => m.id))
+      .in('medication_id', ((medications as Medication[]) ?? []).map((m) => m.id))
       .eq('active', true);
 
     if (sErr) return { data: null, error: new Error(sErr.message) };
