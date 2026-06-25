@@ -28,25 +28,36 @@ const FREQUENCY_OPTIONS = [
   { value: '4', label: 'Cada 4 horas (6 veces al día)', intervalHours: 4 },
 ];
 
-const START_HOUR = 8; // First dose defaults to 08:00 local time
+const DEFAULT_FIRST_DOSE = '08:00';
 
 /**
  * Generate the daily time-of-day slots for a given interval, starting
- * at START_HOUR and wrapping through 24h. For an 8h interval starting
- * at 08:00 this returns ["00:00", "08:00", "16:00"]. For 6h: ["02:00",
- * "08:00", "14:00", "20:00"]. For 24h: ["08:00"].
+ * at the user's chosen first-dose time and wrapping through 24h. For
+ * an 8h interval starting at 09:00 this returns ["01:00", "09:00",
+ * "17:00"]. For 6h starting at 08:00: ["02:00", "08:00", "14:00",
+ * "20:00"]. For 24h: ["08:00"].
  */
-function generateScheduleTimes(intervalHours: number): string[] {
+function generateScheduleTimes(intervalHours: number, startTime: string): string[] {
   if (intervalHours <= 0) return [];
+  const match = /^(\d{1,2}):(\d{2})$/.exec(startTime);
+  if (!match) return [];
+  const startMinutes = Number(match[1]) * 60 + Number(match[2]);
+  const intervalMinutes = intervalHours * 60;
+  const dayMinutes = 24 * 60;
+
   const slots = new Set<number>();
-  let h = START_HOUR;
-  while (!slots.has(h)) {
-    slots.add(h);
-    h = (h + intervalHours) % 24;
+  let current = startMinutes;
+  while (!slots.has(current)) {
+    slots.add(current);
+    current = (current + intervalMinutes) % dayMinutes;
   }
   return Array.from(slots)
     .sort((a, b) => a - b)
-    .map((h) => `${String(h).padStart(2, '0')}:00`);
+    .map((minutes) => {
+      const hh = Math.floor(minutes / 60);
+      const mm = minutes % 60;
+      return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+    });
 }
 
 const ALL_DAYS_MASK = 127; // 0b1111111 = Sun..Sat
@@ -58,6 +69,7 @@ const medicationSchema = z.object({
   dose_unit_other: z.string(),
   route: z.string().min(1, 'La vía es obligatoria'),
   frequency: z.string(),
+  first_dose_time: z.string(),
   frequency_hint: z.string(),
   notes: z.string(),
   stock_estimate: z.number().int().min(0),
@@ -98,6 +110,7 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
       dose_unit_other: medication?.dose_unit_other ?? '',
       route: medication?.route ?? '',
       frequency: 'manual',
+      first_dose_time: DEFAULT_FIRST_DOSE,
       frequency_hint: medication?.frequency_hint ?? '',
       notes: medication?.notes ?? '',
       stock_estimate: medication?.stock_estimate ?? 30,
@@ -128,6 +141,7 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
 
   const selectedUnit = watch('dose_unit');
   const selectedFrequency = watch('frequency');
+  const firstDoseTime = watch('first_dose_time');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [scheduleProgress, setScheduleProgress] = useState<string | null>(null);
 
@@ -197,7 +211,7 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
       }
 
       if (intervalHours > 0 && activePaciente?.timezone_id) {
-        const times = generateScheduleTimes(intervalHours);
+        const times = generateScheduleTimes(intervalHours, firstDoseTime);
         const timezoneId = activePaciente.timezone_id;
         setScheduleProgress(`Generando ${times.length} horarios…`);
 
@@ -239,6 +253,7 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
   const frequencyTimes = selectedFrequency && selectedFrequency !== 'manual'
     ? generateScheduleTimes(
         FREQUENCY_OPTIONS.find((o) => o.value === selectedFrequency)?.intervalHours ?? 0,
+        firstDoseTime,
       )
     : [];
 
@@ -298,24 +313,44 @@ export function MedicationForm({ pacienteId, medication, onSuccess }: Medication
       </div>
 
       {!medication && (
-        <div style={styles.field}>
-          <label htmlFor="frequency" style={styles.label}>Frecuencia</label>
-          <select id="frequency" {...register('frequency')} style={styles.input}>
-            {FREQUENCY_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          {frequencyTimes.length > 0 ? (
-            <span style={{ fontSize: '0.75rem', color: '#0ea5e9' }}>
-              Se crearán {frequencyTimes.length} horarios a las {frequencyTimes.join(', ')}
-              {' '}(todos los días, zona horaria {activePaciente?.timezone_id ?? 'del paciente'}).
-            </span>
-          ) : (
+        <>
+          <div style={styles.field}>
+            <label htmlFor="frequency" style={styles.label}>Frecuencia</label>
+            <select id="frequency" {...register('frequency')} style={styles.input}>
+              {FREQUENCY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {selectedFrequency && selectedFrequency !== 'manual' && (
+            <div style={styles.field}>
+              <label htmlFor="first_dose_time" style={styles.label}>Primera toma a las</label>
+              <input
+                id="first_dose_time"
+                type="time"
+                {...register('first_dose_time')}
+                style={styles.input}
+              />
+              {frequencyTimes.length > 0 ? (
+                <span style={{ fontSize: '0.75rem', color: '#0ea5e9' }}>
+                  Se crearán {frequencyTimes.length} horarios a las {frequencyTimes.join(', ')}
+                  {' '}(todos los días, zona horaria {activePaciente?.timezone_id ?? 'del paciente'}).
+                </span>
+              ) : (
+                <span style={{ fontSize: '0.75rem', color: '#dc2626' }}>
+                  Hora inválida. Probá con formato HH:MM (por ejemplo 09:00 o 21:30).
+                </span>
+              )}
+            </div>
+          )}
+
+          {(!selectedFrequency || selectedFrequency === 'manual') && (
             <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
               Sin frecuencia automática. Después podrás crear los horarios manualmente.
             </span>
           )}
-        </div>
+        </>
       )}
 
       <div style={styles.field}>
