@@ -1,8 +1,11 @@
 // notify-fallback Edge Function
-// Triggered by DB trigger on tomas INSERT. Sends email/SMS notifications
+// Triggered by DB trigger on tomas INSERT or pg_cron dispatch.
+// Sends web-push, email (Resend), and SMS (Twilio) notifications
 // based on paciente's notification_settings. Gracefully handles missing env vars.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
+import { createClient } from '@supabase/supabase-js';
+import * as webpush from 'web-push';
+import { buildPushPayload, isSubscriptionDead } from './push-schema.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -12,11 +15,125 @@ const twilioAuthToken = Deno.env.get('TWILIO_AUTH_TOKEN');
 const twilioFromNumber = Deno.env.get('TWILIO_FROM_NUMBER');
 const appUrl = Deno.env.get('APP_URL') ?? 'https://medicamentos.app';
 
+// VAPID keys for web-push (optional — web-push skipped if not set)
+const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY');
+const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');
+const vapidSubject = Deno.env.get('VAPID_SUBJECT');
+
 if (!supabaseUrl || !supabaseServiceKey) {
   throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// Configure VAPID if keys are available
+let vapidConfigured = false;
+if (vapidPublicKey && vapidPrivateKey && vapidSubject) {
+  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+  vapidConfigured = true;
+} else {
+  console.log('[notify-fallback] VAPID keys not configured — web-push will be skipped');
+}
+
+/**
+ * Send web-push notifications to all active subscribers for a toma.
+ * Handles 410/404 by marking subscriptions inactive.
+ * Logs every attempt to notification_deliveries.
+ */
+async function sendWebPush(
+  toma: {
+    toma_id: string;
+    paciente_id: string;
+    scheduled_at: string;
+    medication_name: string;
+    dose_value: number | null;
+    dose_unit: string | null;
+    paciente_name: string;
+  },
+  subscriptions: Array<{
+    id: string;
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+  }>,
+): Promise<Array<{ subscriptionId: string; status: string; error?: string }>> {
+  if (!vapidConfigured) {
+    console.log('[notify-fallback] web-push skipped (no VAPID keys)');
+    return [];
+  }
+
+  const payload = buildPushPayload(toma);
+  if (!payload) {
+    console.error('[notify-fallback] Failed to build push payload for toma', toma.toma_id);
+    return [];
+  }
+
+  const payloadString = JSON.stringify(payload);
+  const results: Array<{ subscriptionId: string; status: string; error?: string }> = [];
+
+  for (const sub of subscriptions) {
+    const pushSubscription = {
+      endpoint: sub.endpoint,
+      keys: { p256dh: sub.p256dh, auth: sub.auth },
+    };
+
+    try {
+      await webpush.sendNotification(pushSubscription, payloadString, {
+        TTL: 60,
+        urgency: 'high',
+      });
+
+      // Success — log delivery
+      await supabase.from('notification_deliveries').insert({
+        toma_id: toma.toma_id,
+        subscription_id: sub.id,
+        channel: 'web_push',
+        status: 'success',
+        error_message: null,
+      });
+
+      results.push({ subscriptionId: sub.id, status: 'sent' });
+      console.log(`[notify-fallback] web-push sent to ${sub.id}`);
+    } catch (err) {
+      // web-push throws with statusCode on HTTP errors
+      const statusCode = (err as Record<string, unknown>)?.statusCode as number | undefined;
+      const errorMessage = err instanceof Error ? err.message : String(err);
+
+      if (statusCode && isSubscriptionDead(statusCode)) {
+        // 410/404 — subscription is dead, mark inactive
+        await supabase
+          .from('push_subscriptions')
+          .update({ is_active: false })
+          .eq('id', sub.id);
+
+        await supabase.from('notification_deliveries').insert({
+          toma_id: toma.toma_id,
+          subscription_id: sub.id,
+          channel: 'web_push',
+          status: 'failure',
+          error_message: `HTTP ${statusCode} — subscription expired`,
+        });
+
+        results.push({ subscriptionId: sub.id, status: 'subscription_dead', error: `HTTP ${statusCode}` });
+        console.log(`[notify-fallback] subscription ${sub.id} marked inactive (${statusCode})`);
+      } else {
+        // Other error — log failure but continue
+        await supabase.from('notification_deliveries').insert({
+          toma_id: toma.toma_id,
+          subscription_id: sub.id,
+          channel: 'web_push',
+          status: 'failure',
+          error_message: errorMessage,
+        });
+
+        results.push({ subscriptionId: sub.id, status: 'failed', error: errorMessage });
+        console.error(`[notify-fallback] web-push failed for ${sub.id}: ${errorMessage}`);
+      }
+    }
+  }
+
+  return results;
+}
 
 /**
  * Send an email notification via Resend API.
@@ -119,7 +236,7 @@ Deno.serve(async (req) => {
     }
 
     // Fetch the toma details with medication and paciente info
-    const { data: toma, error: tomaError } = await supabase
+    const { data: tomaRaw, error: tomaError } = await supabase
       .from('tomas')
       .select(
         `
@@ -143,13 +260,27 @@ Deno.serve(async (req) => {
       .eq('id', tomaId)
       .single();
 
-    if (tomaError || !toma) {
+    if (tomaError || !tomaRaw) {
       console.error(`[notify-fallback] Failed to fetch toma ${tomaId}: ${tomaError?.message}`);
       return new Response(
         JSON.stringify({ status: 'ok', message: 'Toma not found, skipping' }),
         { headers: { 'Content-Type': 'application/json' } },
       );
     }
+
+    // Normalize the nested data for push-schema compatibility
+    const medication = tomaRaw.schedules?.medications;
+    const paciente = tomaRaw.pacientes;
+
+    const toma = {
+      toma_id: tomaRaw.id,
+      paciente_id: pacienteId,
+      scheduled_at: tomaRaw.scheduled_at,
+      medication_name: medication?.name ?? 'Medicamento',
+      dose_value: medication?.dose_value ?? null,
+      dose_unit: medication?.dose_unit ?? null,
+      paciente_name: paciente?.name ?? 'Paciente',
+    };
 
     // Fetch notification settings for this paciente (global, not per-medication)
     const { data: settings, error: settingsError } = await supabase
@@ -166,22 +297,36 @@ Deno.serve(async (req) => {
     const isChannelEnabled = (channel: string): boolean => {
       const found = settings?.find((s) => s.channel === channel);
       if (found) return found.enabled;
-      // Defaults: in_app ON, email OFF, sms OFF
+      // Defaults: in_app ON, email OFF, sms OFF, web_push OFF
       return channel === 'in_app';
     };
 
-    const medication = toma.schedules?.medications;
-    const paciente = toma.pacientes;
-
-    const medicationName = medication?.name ?? 'Medicamento';
-    const doseValue = medication?.dose_value ?? 0;
-    const doseUnit = medication?.dose_unit ?? '';
-    const pacienteName = paciente?.name ?? 'Paciente';
-
-    const doseText = doseValue > 0 ? `${doseValue} ${doseUnit}` : '';
-    const intakeUrl = `${appUrl}/intake/${tomaId}`;
-
     const results: Record<string, { enabled: boolean; success?: boolean; error?: string }> = {};
+
+    // web-push — first, if enabled and VAPID configured
+    const webPushEnabled = isChannelEnabled('web_push');
+    if (webPushEnabled && vapidConfigured) {
+      // Fetch active push subscribers for this paciente
+      const { data: subscribers, error: subError } = await supabase
+        .rpc('get_active_push_subscribers', { paciente_id: pacienteId });
+
+      if (subError) {
+        console.error(`[notify-fallback] Failed to fetch subscribers: ${subError.message}`);
+        results.web_push = { enabled: true, success: false, error: subError.message };
+      } else if (subscribers && subscribers.length > 0) {
+        const pushResults = await sendWebPush(toma, subscribers);
+        const allSent = pushResults.every((r) => r.status === 'sent');
+        results.web_push = {
+          enabled: true,
+          success: allSent,
+          error: allSent ? undefined : `${pushResults.filter((r) => r.status !== 'sent').length} failed`,
+        };
+      } else {
+        results.web_push = { enabled: true, success: false, error: 'no active subscribers' };
+      }
+    } else {
+      results.web_push = { enabled: webPushEnabled };
+    }
 
     // in_app: skip (handled by SW)
     results.in_app = { enabled: isChannelEnabled('in_app') };
@@ -189,19 +334,17 @@ Deno.serve(async (req) => {
     // email
     const emailEnabled = isChannelEnabled('email');
     if (emailEnabled) {
-      // Note: In a real app, you'd fetch the user's email from auth.users
-      // For now, we log the intent
-      const subject = `💊 Recordatorio: ${medicationName}${doseText ? ` - ${doseText}` : ''}`;
+      const doseText = toma.dose_value != null ? `${toma.dose_value} ${toma.dose_unit ?? ''}`.trim() : '';
+      const intakeUrl = `${appUrl}/intake/${tomaId}`;
+      const subject = `💊 Recordatorio: ${toma.medication_name}${doseText ? ` - ${doseText}` : ''}`;
       const html = `
-        <p>Es hora de tomar <strong>${medicationName}</strong>.</p>
+        <p>Es hora de tomar <strong>${toma.medication_name}</strong>.</p>
         <p>Dosis: ${doseText || 'No especificada'}</p>
-        <p>Paciente: ${pacienteName}</p>
+        <p>Paciente: ${toma.paciente_name}</p>
         <p><a href="${intakeUrl}">Registrar toma</a></p>
       `;
 
-      // We don't have the user's email here — would need to join with auth.users
-      // For now, log the intent
-      console.log(`[notify-fallback] email would send to ${pacienteName}: ${subject}`);
+      console.log(`[notify-fallback] email would send to ${toma.paciente_name}: ${subject}`);
       results.email = { enabled: true, success: false, error: 'no email address available' };
     } else {
       results.email = { enabled: false };
@@ -210,8 +353,9 @@ Deno.serve(async (req) => {
     // sms
     const smsEnabled = isChannelEnabled('sms');
     if (smsEnabled) {
-      // Note: In a real app, you'd fetch the user's phone from a profile table
-      const smsBody = `${medicationName} ${doseText}. ${intakeUrl}`;
+      const doseText = toma.dose_value != null ? `${toma.dose_value} ${toma.dose_unit ?? ''}`.trim() : '';
+      const intakeUrl = `${appUrl}/intake/${tomaId}`;
+      const smsBody = `${toma.medication_name} ${doseText}. ${intakeUrl}`;
       console.log(`[notify-fallback] sms would send: ${smsBody}`);
       results.sms = { enabled: true, success: false, error: 'no phone number available' };
     } else {
