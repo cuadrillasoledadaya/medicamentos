@@ -181,23 +181,66 @@ self.addEventListener('notificationclick', (event) => {
   });
 });
 
-// --- Push Event (future) ---
+// --- Push Event Handler ---
+//
+// Handles incoming Web Push notifications from the Edge Function.
+// Parses the payload, deduplicates by notification_id, and shows
+// a notification with action buttons (taken/snooze/skip).
 
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
+  let data;
   try {
-    const data = event.data.json();
-    self.registration.showNotification(data.title || 'Recordatorio', {
-      body: data.body || '',
-      icon: '/pwa-192x192.png',
-      actions: [
-        { action: 'taken', title: 'Marcar como tomada' },
-        { action: 'snooze', title: 'Posponer 10 min' },
-        { action: 'skip', title: 'Saltar' },
-      ],
-    });
+    data = event.data.json();
   } catch {
-    // Ignore malformed push data
+    console.warn('[SW] Push event: malformed JSON');
+    return;
   }
+
+  // Validate required fields
+  if (!data || typeof data !== 'object') return;
+  if (!data.notification_id || !data.medication_name || !data.dose) {
+    console.warn('[SW] Push event: missing required fields', data);
+    return;
+  }
+
+  const notificationId = String(data.notification_id);
+  const title = data.medication_name;
+  const body = `${data.dose} (${data.scheduled_at || ''})`;
+
+  // Dedupe: close any existing notification with the same tag
+  self.registration.getNotifications({ tag: notificationId }).then((notifications) => {
+    notifications.forEach((n) => n.close());
+  });
+
+  self.registration.showNotification(title, {
+    body,
+    tag: notificationId,
+    icon: '/pwa-192x192.png',
+    requireInteraction: false,
+    actions: [
+      { action: 'taken', title: 'Marcar como tomada', icon: '/pwa-192x192.png' },
+      { action: 'snooze', title: 'Posponer 10 min', icon: '/pwa-192x192.png' },
+      { action: 'skip', title: 'Saltar', icon: '/pwa-192x192.png' },
+    ],
+    data: {
+      notification_id: notificationId,
+      action_url: data.action_url || '/today',
+      paciente_id: data.paciente_id,
+    },
+  });
+});
+
+// --- SW Lifecycle ---
+
+self.addEventListener('install', (event) => {
+  // Take control of all open clients immediately
+  // @ts-ignore
+  event.waitUntil(self.skipWaiting());
+});
+
+self.addEventListener('activate', (event) => {
+  // @ts-ignore
+  event.waitUntil(self.clients.claim());
 });
