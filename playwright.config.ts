@@ -28,7 +28,13 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        // Grant notification permission so SW can show notifications in tests.
+        // Tests that need to verify the permission prompt itself should use
+        // test.skip() or a separate project without this permission.
+        permissions: ['notifications'],
+      },
     },
   ],
   webServer: {

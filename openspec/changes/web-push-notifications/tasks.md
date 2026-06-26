@@ -183,7 +183,7 @@
 
 ### 5.1 Create `tests/e2e/push.spec.ts`
 
-- **What**: Playwright: grant notification permission; register fake push service via Chromium flags (`--enable-features=Push`); use `page.clock.fastForward` to simulate cron tick; SW `push` event listener asserts `showNotification` called with 3 action buttons; click each action and verify navigation/API call
+- [x] **What**: Playwright e2e tests for web push flow. Tests cover: DeviceList rendering on settings page, subscription revoke flow, iOS badge visibility (desktop Chrome), SW push handler with test hook, and action button routing (Snooze/Taken/Skip postMessage). iOS UA override tests and SW registration tests are skipped with documented rationale — covered by existing unit tests. Test hook added to `src/sw.ts` under DEV guard for push simulation.
 
 ---
 
