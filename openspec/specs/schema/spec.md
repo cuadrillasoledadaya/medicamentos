@@ -1,3 +1,4 @@
+<!-- Synced from openspec/changes/web-push-notifications/ on 2026-06-26. Source-of-truth delta. -->
 # Schema Reference — Complete Database Specification
 
 ## Purpose
@@ -148,12 +149,42 @@ Per-paciente and per-medication notification overrides.
 | `id` | `uuid` | PK, default `gen_random_uuid()` |
 | `paciente_id` | `uuid` | FK to `pacientes.id`, NOT NULL |
 | `medication_id` | `uuid` | FK to `medications.id`, NULL — NULL means global paciente setting |
-| `channel` | `text` | NOT NULL — enum: `in_app`, `email`, `sms` |
+| `channel` | `text` | NOT NULL — enum: `in_app`, `email`, `sms`, `web_push` |
 | `enabled` | `boolean` | NOT NULL, default `true` |
 | `created_at` | `timestamptz` | NOT NULL, default `now()` |
 | `updated_at` | `timestamptz` | NOT NULL, default `now()` |
 
 Unique constraint: `(paciente_id, medication_id, channel)` where `medication_id` can be NULL.
+
+### Table: `push_subscriptions`
+
+Web Push subscription store, keyed by user and device. Defined in reminder/spec.md.
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | `uuid` | PK, default `gen_random_uuid()` |
+| `user_id` | `uuid` | FK to `auth.users.id`, NOT NULL |
+| `endpoint` | `text` | NOT NULL, UNIQUE |
+| `p256dh` | `text` | NOT NULL |
+| `auth` | `text` | NOT NULL |
+| `device_name` | `text` | NULL |
+| `is_active` | `boolean` | NOT NULL, default `true` |
+| `created_at` | `timestamptz` | NOT NULL, default `now()` |
+| `last_seen_at` | `timestamptz` | NULL |
+
+### Table: `notification_deliveries`
+
+Delivery audit log for Web Push attempts. Defined in reminder/spec.md. Channel is `text` (not enum) to avoid the enum ALTER TYPE tx hazard in 0013 — the Edge Function casts at INSERT time.
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | `uuid` | PK, default `gen_random_uuid()` |
+| `toma_id` | `uuid` | FK to `tomas.id`, NOT NULL |
+| `subscription_id` | `uuid` | FK to `push_subscriptions.id`, NOT NULL |
+| `channel` | `text` | NOT NULL |
+| `sent_at` | `timestamptz` | NOT NULL, default `now()` |
+| `status` | `text` | NOT NULL, CHECK (`status IN ('success', 'failure')`) |
+| `error_message` | `text` | NULL |
 
 ---
 
@@ -302,7 +333,7 @@ Common masks:
 
 ### Notification Channel Values
 
-`in_app`, `email`, `sms`
+`in_app`, `email`, `sms`, `web_push`
 
 ---
 
@@ -327,7 +358,11 @@ Recommended indexes for common query patterns:
 | `family_members` | `(user_id, status)` | Active family membership lookup |
 | `family_members` | `(paciente_id, user_id)` | Role lookup per patient |
 | `notification_settings` | `(paciente_id, medication_id)` | Setting lookup |
-| `interactions` | `(drug_a, drug_b)` | Interaction lookup with canonical ordering |
+| `push_subscriptions` | `(user_id, is_active)` | Active subscriptions per user |
+| `push_subscriptions` | `(endpoint)` | Unique endpoint lookup for deduplication |
+| `notification_deliveries` | `(subscription_id, sent_at)` | Delivery audit per subscription |
+| `notification_deliveries` | `(toma_id)` | Per-toma delivery lookup |
+| `interactions`      | `(drug_a, drug_b)`          | Interaction lookup with canonical ordering |
 | `temporadas` | `(paciente_id, closed_at)` | Open temporada per patient |
 
 ---
@@ -344,6 +379,8 @@ sdd-apply translates these into actual Postgres RLS policies. All tables have RL
 | `schedules` | Same patient via `family_members` | `cuidador_principal` only |
 | `tomas` | Same patient via `family_members` | All active family members INSERT; `cuidador_principal` or `registered_by` UPDATE |
 | `notification_settings` | Same patient via `family_members` | `cuidador_principal` only |
+| `push_subscriptions` | Owner (user_id = auth.uid()) reads own rows; cuidador_principal reads family via subquery | Owner (insert/update own rows) |
+| `notification_deliveries` | Family read via `is_active_family_member` | Insert gated by family membership |
 | `stock_adjustments` | Same patient via `family_members` | `cuidador_principal` only |
 | `adherence_daily` | Same patient via `family_members` | System only (scheduled function) |
 | `interactions` | All authenticated users (read-only curated list) | `cuidador_principal` only |

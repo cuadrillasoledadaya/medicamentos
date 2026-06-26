@@ -1,13 +1,6 @@
-<!-- Synced from openspec/changes/web-push-notifications/ on 2026-06-26. Source-of-truth delta. -->
-# Reminder / Notification Domain Specification
+# Delta Spec: web-push-notifications
 
-## Purpose
-
-Defines the notification strategy using Web Notifications API + Service Worker (Workbox), Web Push notifications, notification channels, per-paciente and per-medication overrides, iOS PWA limitations, and action buttons.
-
----
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Notification Channels
 
@@ -24,6 +17,8 @@ A `notification_settings` table SHALL store per-paciente and per-medication over
 
 A `push_subscriptions` table SHALL store Web Push subscription objects per user per device, keyed by user ID.
 
+(Previously: three channels — in_app, email, sms — with no push_subscriptions table)
+
 #### Scenario: Web push channel can be enabled per paciente
 
 - GIVEN a caregiver is on the Notification Settings page for a paciente
@@ -39,58 +34,17 @@ A `push_subscriptions` table SHALL store Web Push subscription objects per user 
 - IF the user denies permission: no push_subscriptions row is created and the toggle reverts to OFF
 - IF the user grants permission: a push_subscriptions row is created and the toggle stays ON
 
-### Requirement: Notification Trigger
+---
 
-The system SHALL fire a Web Notification when a `pending` toma enters its tolerance window (`scheduled_at - 0 min` to `scheduled_at + 15 min`). The Service Worker SHALL display the notification using `self.registration.showNotification()`.
+### Requirement: Notification Channel Values
 
-#### Scenario: Notification fires at scheduled time
+The `notification_channel` enum values SHALL be: `in_app`, `email`, `sms`, `web_push`.
 
-- GIVEN a schedule fires a toma at `scheduled_at = 08:00`
-- WHEN the current time reaches `07:59` (1 minute before)
-- THEN the Service Worker SHALL show a notification with the medication name and scheduled time
+(Previously: `in_app`, `email`, `sms`)
 
-### Requirement: Notification Action Buttons
+---
 
-Each notification SHALL include three action buttons:
-
-1. **"Marcar como tomada"** — logs a `taken` event via `clients.matchAll()` and closes the notification
-2. **"Posponer 10 min"** — sets `snoozed_until = scheduled_at + 10 min` on the toma and reschedules the notification
-3. **"Saltar"** — marks the toma as `skipped` with no reason and closes the notification
-
-#### Scenario: Mark as taken via notification action
-
-- GIVEN a notification is displayed for a pending toma
-- WHEN the user taps "Marcar como tomada"
-- THEN the Service Worker SHALL call the intake API to set `status = taken_on_time` and `taken_at = now()`
-- AND close the notification
-
-### Requirement: iOS PWA Limitation (Known Constraint)
-
-Web Notifications on iOS Safari and iOS PWA (standalone) are unreliable when the app is backgrounded: `Notification.permission` may be granted but `showNotification` may not fire. The system SHALL mitigate this with the following fallback strategy:
-
-- **Primary**: In-app dashboard alert — the PWA landing screen SHALL display a banner listing all `pending` tomas for the current day, sorted by time
-- **Secondary**: Email notification via Supabase Edge Function (activated by user opt-in)
-- **Tertiary**: SMS via Supabase Edge Function and a configured SMS provider (Twilio or similar; user provides credentials)
-- **Web Push**: System-level push notifications via VAPID/web-push protocol (activated by per-device opt-in in settings)
-- The caregiver dashboard SHALL display a "notification status" indicator: green (notification likely delivered), yellow (iOS — in-app only), red (permission denied)
-
-#### Scenario: iOS notification fallback
-
-- GIVEN a user opens the PWA on iOS Safari and the app is backgrounded
-- WHEN a scheduled notification time arrives
-- THEN the in-app banner on the dashboard SHALL display the pending tomas
-- AND no relying party SHALL expect a system-level notification to appear
-
-### Requirement: Per-Medication Override
-
-A `cuidador_principal` SHALL be able to disable notifications for a specific medication while keeping them enabled for others.
-
-#### Scenario: Disable notifications per medication
-
-- GIVEN a paciente has notifications enabled globally
-- WHEN a cuidador disables notifications for medication "Metformin"
-- THEN no system notifications SHALL fire for Metformin's schedules
-- AND the in-app dashboard banner SHALL still show the pending tomas for Metformin
+## ADDED Requirements
 
 ### Requirement: VAPID Public Key Distribution
 
@@ -103,6 +57,8 @@ The client SHALL use this key when calling `pushManager.subscribe()`.
 - GIVEN the frontend build includes `VITE_VAPID_PUBLIC_KEY=BCk…`
 - WHEN the NotificationSettingsForm component mounts
 - THEN it SHALL read `import.meta.env.VITE_VAPID_PUBLIC_KEY` for use in `pushManager.subscribe(options)`
+
+---
 
 ### Requirement: Web Push Subscription Management
 
@@ -129,6 +85,8 @@ The system SHALL allow a user to create, list, and delete Web Push subscriptions
 - AND the device SHALL receive no further push notifications
 - AND the UI SHALL remove that subscription from the list
 
+---
+
 ### Requirement: Scheduled Push Delivery
 
 A pg_cron job SHALL run every 60 seconds and send a Web Push notification for every `pending` toma whose `scheduled_at` falls within the delivery window: `scheduled_at <= now() < scheduled_at + 5 minutes`.
@@ -153,6 +111,8 @@ For each qualifying toma, the system SHALL identify all `active` family members 
 - GIVEN a paciente has three family members: one `active`, one `pending`, one `revoked`
 - WHEN a toma for that paciente is due
 - THEN the push SHALL be sent only to subscriptions of the `active` family member
+
+---
 
 ### Requirement: Push Payload Contract
 
@@ -185,6 +145,8 @@ Every Web Push payload sent to the Service Worker SHALL be a JSON object with th
 - WHEN the Service Worker's `push` event handler receives the event
 - THEN it SHALL NOT call `showNotification`
 - AND SHALL log a warning for observability
+
+---
 
 ### Requirement: Service Worker Push Handler
 
@@ -232,6 +194,8 @@ The Service Worker SHALL handle the `push` event by displaying a system notifica
 - WHEN the user taps the notification body (not an action button)
 - THEN the SW SHALL open the app to `/today`
 
+---
+
 ### Requirement: Subscription Pruning
 
 When the Web Push service returns HTTP `410 Gone` or `404 Not Found` for a subscription, the system SHALL mark that subscription as `active = false`.
@@ -248,6 +212,8 @@ When the Web Push service returns HTTP `410 Gone` or `404 Not Found` for a subsc
 - WHEN the Edge Function sends a push and receives HTTP 404
 - THEN it SHALL set `active = false` on that subscription row
 
+---
+
 ### Requirement: iOS PWA Install Badge
 
 The Notification Settings UI SHALL display an "Add to Home Screen" reminder to iOS users when `web_push` is enabled but the PWA is not installed as a standalone app.
@@ -258,6 +224,8 @@ The Notification Settings UI SHALL display an "Add to Home Screen" reminder to i
 - AND `web_push` is enabled for at least one paciente
 - WHEN the Notification Settings page renders
 - THEN a yellow info badge SHALL be shown: "To receive push notifications on iOS, tap Share → Add to Home Screen"
+
+---
 
 ### Requirement: Delivery Audit
 
@@ -274,16 +242,3 @@ The system SHALL log every Web Push delivery attempt to a `notification_deliveri
 - GIVEN a push delivery fails (non-2xx response)
 - WHEN the Web Push service responds
 - THEN the system SHALL insert a row into `notification_deliveries` with `status = 'failure'` and `error_message` containing the response code or body
-
----
-
-## Known Limitations (web-push-ux-fixes follow-up)
-
-The following scenarios from this spec are **not fully implemented** in the `web-push-notifications` change. They are deferred to a follow-up change `web-push-ux-fixes`. See `openspec/changes/archive/2026-06-26-web-push-notifications/verify-report.md` for full details.
-
-| ID | Requirement | Issue | Severity |
-|----|-------------|-------|----------|
-| A12 | SW: User taps "Taken" → navigate to `/today` | Code does not call `clients.openWindow('/today')` after postMessage | FAIL |
-| A14 | SW: User taps "Skip" → navigate to `/today` | Code does not call `clients.openWindow('/today')` after postMessage | FAIL |
-| A15 | SW: User taps notification body → open `/today` | Body tap early-returns; no navigation handler | FAIL |
-| F-02 | Web Push Subscription: Revoke flow | Local `PushSubscription.unsubscribe()` is never called; only server `is_active=false` | PARTIAL (caveat) |

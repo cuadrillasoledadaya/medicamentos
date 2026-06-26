@@ -1,0 +1,104 @@
+schema: spec-driven
+
+# ---------------------------------------------------------------------------
+# Project: medicamentos
+# Status: greenfield — directory contained only `.atl/` (skill-registry) at
+# init time. No source code, no package manifest, no git repo. Stack intent
+# declared by the product owner: PWA for medication tracking with alarms,
+# multi-user family sharing, sync via an existing Supabase project
+# (URL + anon key on hand, NOT committed to this repo).
+# ---------------------------------------------------------------------------
+
+context: |
+  Project type: Progressive Web App (medication tracking + reminders).
+  Stack: not yet committed (greenfield — pending sdd-propose).
+  Persistence backend: Supabase (project provisioned externally).
+  Sync model: multi-user / family sharing (design pending).
+  Offline strategy: PWA → Service Worker + IndexedDB (design pending).
+  Reminder delivery: web alarms (Notification API + showNotification /
+  Periodic Background Sync) — feasibility to be re-evaluated in sdd-propose.
+  Repo: NOT a git repo. Source-control must be initialized during sdd-propose
+  or sdd-apply (decision: `git init` vs. import to existing host).
+
+rules:
+  proposal:
+    - Lock the stack (frontend framework, build tool, package manager, test
+      runner) BEFORE writing spec scenarios. Greenfield → everything is in
+      scope, so the proposal must justify each choice with a tradeoff.
+    - Include a rollback plan for any change that mutates the Supabase
+      schema or RLS policies (destructive remote side effects).
+    - Surface every open domain question to the medical-domain expert
+      (drug catalog source, dose units, timezone, locale) — do not invent.
+  specs:
+    - Use Given/When/Then for every scenario.
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY) — no informal "must".
+    - Domain model (medication, schedule, dose, intake, family member,
+      reminder) MUST be defined in the FIRST spec, even if minimal.
+    - Multi-tenant / family-sharing requirements MUST enumerate the
+      RLS contract; do not leave authorization as an implementation detail.
+  design:
+    - Include sequence diagrams for: alarm firing, offline intake
+      reconciliation, family-share invite, and any Supabase Realtime flow.
+    - Document the offline conflict-resolution policy with rationale
+      (last-write-wins vs. CRDT vs. server-authoritative).
+    - Reminder delivery on web has platform limits — document the chosen
+      fallback for users who deny Notification permission or who never
+      open the PWA.
+  tasks:
+    - Group by phase (scaffold, domain, sync, reminders, sharing, polish).
+    - Use hierarchical numbering (1, 1.1, 1.2 …) — keep each task
+      completable in one focused session.
+    - Every Supabase-touching task MUST include its migration + RLS
+      policy as part of the same work unit.
+  apply:
+    # Stack and runner are now committed (Vitest 4.x + Playwright 1.61.x).
+    tdd: true
+    test_command: "pnpm vitest run"
+    tdd_note: |
+      Vitest is wired (PR 7b, T-028) with jsdom environment, IDB polyfill
+      (fake-indexeddb), and v8 coverage. Playwright is wired (PR 7c, T-029)
+      for E2E + RLS contract tests. From this point forward, `sdd-apply`
+      MUST follow the RED-GREEN-REFACTOR cycle for any new code: write
+      the failing test first, then the implementation, then refactor.
+      Playwright is invoked separately via `pnpm test:e2e`.
+  verify:
+    test_command: "pnpm vitest run && pnpm exec playwright test"
+    build_command: "pnpm build"
+    coverage_threshold: 60
+    verify_note: |
+      `verify` runs Vitest first, then Playwright. Coverage threshold
+      (60%) applies to Vitest v8 reports only; Playwright E2E coverage
+      is structural (spec file exists per feature area) not line-based.
+  archive:
+    - Warn before merging any delta that mutates Supabase schema, RLS,
+      or stored medical data — archive is irreversible from the user's
+      perspective even though the change folder is preserved.
+
+# ---------------------------------------------------------------------------
+# Testing capabilities (snapshot — re-evaluated by sdd-propose)
+# ---------------------------------------------------------------------------
+testing:
+  strict_tdd: true
+  strict_tdd_reason: |
+    Test runner and stack are committed as of 2026-06-20 (T-028, T-029,
+    T-030). Vitest 4.x covers unit + integration. Playwright 1.61.x covers
+    E2E + RLS contract. From this point forward, `sdd-apply` MUST enforce
+    the RED-GREEN-REFACTOR cycle for any new logic. The `strict-tdd.md`
+    module in the sdd-apply skill is now active and overrides the
+    Standard Workflow in Step 4.
+  runner:
+    command: "pnpm vitest run"
+    framework: "vitest"
+  layers:
+    unit:        { available: true,  tool: "vitest" }
+    integration: { available: true,  tool: "vitest" }
+    e2e:         { available: true,  tool: "playwright" }
+  coverage:
+    available: true
+    command: "pnpm test:coverage"
+    provider: "v8"
+    threshold: 60
+  quality:
+    linter:       { available: true, command: "pnpm lint" }
+    type_checker: { available: true, command: "pnpm tsc --noEmit" }
+    formatter:    { available: true, command: "pnpm format" }
