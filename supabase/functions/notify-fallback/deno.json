@@ -1,5 +1,7 @@
 {
   "imports": {
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.49.4"
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.49.4",
+    "web-push": "https://esm.sh/web-push@3.6.7?target=denonext",
+    "zod": "npm:zod@3.24.2"
   }
 }

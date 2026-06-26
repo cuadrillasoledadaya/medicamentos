@@ -232,3 +232,59 @@ describe('Migration 0014 — tomas_due_for_push view', () => {
     expect(sql).toMatch(/paciente_name/i);
   });
 });
+
+describe('Migration 0015 — push_dispatch_cron', () => {
+  it('file exists and contains cron.schedule call', () => {
+    const sql = readMigration('0015_push_dispatch_cron.sql');
+    expect(sql).toMatch(/cron\.schedule\s*\(/i);
+  });
+
+  it('schedules job every minute', () => {
+    const sql = readMigration('0015_push_dispatch_cron.sql');
+    expect(sql).toMatch(/\*\s+\*\s+\*\s+\*\s+\*/);
+  });
+
+  it('calls materialize_due_pushes or dispatch_push_for_due_tomas function', () => {
+    const sql = readMigration('0015_push_dispatch_cron.sql');
+    expect(sql).toMatch(/materialize_due_pushes|dispatch_push_for_due_tomas/i);
+  });
+
+  it('creates get_active_push_subscribers function returning setof push_subscriptions', () => {
+    const sql = readMigration('0015_push_dispatch_cron.sql');
+    expect(sql).toMatch(/create\s+(or\s+replace\s+)?function\s+(public\.)?get_active_push_subscribers/i);
+    expect(sql).toMatch(/returns\s+setof\s+(public\.)?push_subscriptions/i);
+  });
+
+  it('creates materialize_due_pushes function that queries tomas_due_for_push', () => {
+    const sql = readMigration('0015_push_dispatch_cron.sql');
+    expect(sql).toMatch(/create\s+(or\s+replace\s+)?function\s+(public\.)?materialize_due_pushes/i);
+    expect(sql).toMatch(/tomas_due_for_push/i);
+  });
+
+  it('uses net.http_post to call notify-fallback Edge Function', () => {
+    const sql = readMigration('0015_push_dispatch_cron.sql');
+    expect(sql).toMatch(/net\.http_post/i);
+    expect(sql).toMatch(/notify-fallback/i);
+  });
+
+  it('references app.settings.supabase_url GUC setting', () => {
+    const sql = readMigration('0015_push_dispatch_cron.sql');
+    expect(sql).toMatch(/current_setting\s*\(\s*['"]app\.supabase_url['"]\s*\)/i);
+  });
+
+  it('references app.settings.supabase_service_role_key GUC setting', () => {
+    const sql = readMigration('0015_push_dispatch_cron.sql');
+    expect(sql).toMatch(/current_setting\s*\(\s*['"]app\.supabase_service_role_key['"]\s*\)/i);
+  });
+
+  it('creates snooze_toma RPC function', () => {
+    const sql = readMigration('0015_push_dispatch_cron.sql');
+    expect(sql).toMatch(/create\s+(or\s+replace\s+)?function\s+(public\.)?snooze_toma/i);
+    expect(sql).toMatch(/snoozed_until\s*=\s*now\(\)\s*\+\s*interval/i);
+  });
+
+  it('uses security definer on functions that call net.http_post', () => {
+    const sql = readMigration('0015_push_dispatch_cron.sql');
+    expect(sql).toMatch(/security\s+definer/i);
+  });
+});

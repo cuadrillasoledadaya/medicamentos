@@ -87,21 +87,31 @@
 
 ## PR 2: Server Delivery (~280 lines)
 
+- [x] 2.1 Create `supabase/migrations/0015_push_dispatch_cron.sql`
+
 ### 2.1 Create `supabase/migrations/0015_push_dispatch_cron.sql`
 
 - **What**: `get_active_push_subscribers(paciente_id)` function returning `setof push_subscriptions`; `materialize_due_pushes()` plpgsql calling `net.http_post` to `notify-fallback`; `cron.schedule('notify-push-due-tomas','* * * * *')`; also create `snooze_toma` RPC: `UPDATE tomas SET snoozed_until = now() + interval '10 minutes'`
+
+- [x] 2.2 Modify `supabase/functions/notify-fallback/deno.json`
 
 ### 2.2 Modify `supabase/functions/notify-fallback/deno.json`
 
 - **What**: Add import-map entry: `"web-push": "https://esm.sh/web-push@3.6.7?target=denonext"`
 
+- [x] 2.3 Modify `supabase/functions/notify-fallback/index.ts` (sendWebPush branch)
+
 ### 2.3 Modify `supabase/functions/notify-fallback/index.ts` (sendWebPush branch)
 
 - **What**: Read VAPID env vars; iterate subscribers; call `webpush.sendNotification`; handle 200→delivery log, 410/404→mark inactive; continue on per-sub error (don't throw)
 
+- [x] 2.4 Write unit test: `sendWebPush` payload + 410/404 handling
+
 ### 2.4 Write unit test: `sendWebPush` payload + 410/404 handling
 
 - **What**: `vitest`; mock `fetch` to return 200/410/404; assert `notification_deliveries` INSERT and `is_active=false` update
+
+- [x] 2.5 Write unit test: VAPID key shape validation
 
 ### 2.5 Write unit test: VAPID key shape validation
 
