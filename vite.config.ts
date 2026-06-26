@@ -4,6 +4,14 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  // Expose dev server on the local network so the PWA can be opened
+  // from a phone on the same WiFi. `host: true` binds to 0.0.0.0 and
+  // also makes Vite print the network URL in the terminal.
+  server: {
+    host: true,
+    port: 5173,
+    strictPort: false,
+  },
   plugins: [
     react(),
     VitePWA({

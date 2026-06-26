@@ -1,0 +1,182 @@
+/* AppShell responsive styles
+   Desktop (>768px): horizontal nav in header, no tabbar, no sheet.
+   Mobile (<=768px): header shrinks, bottom tabbar appears, "Más" opens
+   a bottom sheet with the remaining sections.
+   The 768px breakpoint matches common tablet portrait width. */
+
+@media (max-width: 768px) {
+  .app-header {
+    padding: 0.5rem 0.75rem !important;
+    gap: 0.5rem !important;
+  }
+
+  .app-header h1 {
+    font-size: 1rem !important;
+  }
+
+  .app-header .paciente-selector {
+    max-width: 140px !important;
+    font-size: 0.8rem !important;
+  }
+
+  .desktop-nav {
+    display: none !important;
+  }
+
+  .app-main {
+    /* Reserve space so content is not hidden behind the fixed tabbar */
+    padding-bottom: 76px !important;
+  }
+
+  .app-footer {
+    display: none !important;
+  }
+}
+
+/* Bottom tabbar: visible only on mobile. */
+.mobile-tabbar {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-tabbar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border-top: 1px solid #e5e7eb;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+    padding: 0.4rem 0;
+    /* Respect iPhone safe area */
+    padding-bottom: max(0.4rem, env(safe-area-inset-bottom));
+    z-index: 50;
+    justify-content: space-around;
+    align-items: stretch;
+  }
+}
+
+.mobile-tabbar a,
+.mobile-tabbar button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.25rem 0.25rem;
+  color: #6b7280;
+  text-decoration: none;
+  background: none;
+  border: none;
+  font-size: 0.7rem;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-tabbar a.active,
+.mobile-tabbar button.active {
+  color: #0ea5e9;
+  font-weight: 600;
+}
+
+.mobile-tabbar .tabbar-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.mobile-tabbar .tabbar-label {
+  font-size: 0.7rem;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* "Más" sheet (bottom sheet with backdrop). */
+.more-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fade-in 0.15s ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.more-sheet {
+  background: #ffffff;
+  width: 100%;
+  max-width: 500px;
+  border-radius: 16px 16px 0 0;
+  padding: 0.75rem 1rem 1rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  max-height: 75vh;
+  overflow-y: auto;
+  animation: slide-up 0.2s ease-out;
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.more-sheet h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  text-align: center;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.more-sheet .more-sheet-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.25rem;
+}
+
+.more-sheet a {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  color: #111827;
+  text-decoration: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.more-sheet a:active {
+  background: #f3f4f6;
+}
+
+.more-sheet a.active {
+  background: #e0f2fe;
+  color: #0ea5e9;
+  font-weight: 600;
+}
+
+.more-sheet .more-icon {
+  font-size: 1.3rem;
+  width: 1.6rem;
+  text-align: center;
+}
