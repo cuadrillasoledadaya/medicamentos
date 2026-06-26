@@ -62,3 +62,45 @@ export function validatePushPayload(data: unknown): PushPayload | null {
   const result = pushPayloadSchema.safeParse(data);
   return result.success ? result.data : null;
 }
+
+// ---------------------------------------------------------------------------
+// Payload construction helpers (pure functions — testable with vitest)
+// ---------------------------------------------------------------------------
+
+/** Build a push payload from a toma row. Returns null if data is incomplete. */
+export function buildPushPayload(toma: {
+  toma_id: string;
+  paciente_id: string;
+  scheduled_at: string;
+  medication_name: string;
+  dose_value: number | null;
+  dose_unit: string | null;
+  paciente_name: string;
+}): PushPayload | null {
+  const hasDose = toma.dose_value != null && toma.dose_unit != null && toma.dose_unit.trim() !== '';
+  const dose = hasDose ? `${toma.dose_value} ${toma.dose_unit}`.trim() : 'No especificada';
+  const unit = hasDose ? toma.dose_unit! : 'unidad';
+
+  return validatePushPayload({
+    notification_id: toma.toma_id,
+    type: 'medication_reminder',
+    paciente_id: toma.paciente_id,
+    paciente_name: toma.paciente_name,
+    medication_name: toma.medication_name,
+    dose,
+    unit,
+    scheduled_at: toma.scheduled_at,
+    action_url: '/today',
+  });
+}
+
+/**
+ * Determine if a push service response indicates a dead subscription.
+ * 410 Gone and 404 Not Found mean the endpoint is no longer valid.
+ */
+export function isSubscriptionDead(status: number): boolean {
+  return status === 410 || status === 404;
+}
+
+/** Max VAPID payload size in bytes (4KB limit per Web Push spec). */
+export const MAX_VAPID_PAYLOAD_BYTES = 4096;
