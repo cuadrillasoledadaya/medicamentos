@@ -104,3 +104,18 @@ export function isSubscriptionDead(status: number): boolean {
 
 /** Max VAPID payload size in bytes (4KB limit per Web Push spec). */
 export const MAX_VAPID_PAYLOAD_BYTES = 4096;
+
+// ---------------------------------------------------------------------------
+// ClientSubscriptionPayload — normalized subscription object the client sends
+// to the server when subscribing to push notifications.
+// ---------------------------------------------------------------------------
+
+export const clientSubscriptionSchema = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({
+    p256dh: z.string().min(1),
+    auth: z.string().min(1),
+  }),
+});
+
+export type ClientSubscriptionPayload = z.infer<typeof clientSubscriptionSchema>;
