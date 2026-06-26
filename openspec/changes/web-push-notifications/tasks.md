@@ -123,35 +123,35 @@
 
 ### 3.1 Create `src/features/notifications/pushSubscription.ts`
 
-- **What**: `subscribeToPush()` (pushManager.subscribe + POST row), `unsubscribeFromPush(id)`, `listMyPushSubscriptions()`, `parseDeviceName()` UA parser
+- [x] **What**: `subscribeToPush()` (pushManager.subscribe + POST row), `unsubscribeFromPush(id)`, `listMyPushSubscriptions()`, `parseDeviceName()` UA parser
 
 ### 3.2 Create `src/features/notifications/useVapidPublicKey.ts`
 
-- **What**: Read `import.meta.env.VITE_VAPID_PUBLIC_KEY` as `string | undefined`; export `useVapidPublicKey()` hook
+- [x] **What**: Read `import.meta.env.VITE_VAPID_PUBLIC_KEY` as `string | undefined`; export `useVapidPublicKey()` hook
 
 ### 3.3 Modify `src/features/notifications/scheduler.ts`
 
-- **What**: Add `isIOSStandalone()` (isIOS + display-mode check); export `requestPushSubscription()` combining permission request + pushManager.subscribe + POST row
+- [x] **What**: Add `isIOSStandalone()` (isIOS + display-mode check); export `requestPushSubscription()` combining permission request + pushManager.subscribe + POST row
 
 ### 3.4 Modify `src/sw.ts` — rewrite push event handler (lines 186–203)
 
-- **What**: Parse payload; validate `notification_id` required; dedupe via `getNotifications({tag}).then(close)`; `showNotification` with medication_name, dose, 3 actions (taken/snooze/skip); keep existing `notificationclick` action → postMessage
+- [x] **What**: Parse payload; validate `notification_id` required; dedupe via `getNotifications({tag}).then(close)`; `showNotification` with medication_name, dose, 3 actions (taken/snooze/skip); keep existing `notificationclick` action → postMessage
 
 ### 3.5 Modify `src/features/notifications/NotificationPermissionPrompt.tsx`
 
-- **What**: `handleAllow` calls `requestPushSubscription()` when VAPID present; on failure, existing prompt UX still applies
+- [x] **What**: `handleAllow` calls `requestPushSubscription()` when VAPID present; on failure, existing prompt UX still applies
 
 ### 3.6 Write unit test: `parseDeviceName` (table-driven)
 
-- **What**: `vitest`; test Chrome/Firefox/Safari/Android/iOS UA strings; assert correct short labels
+- [x] **What**: `vitest`; test Chrome/Firefox/Safari/Edge/Android/iOS UA strings; assert correct short labels
 
 ### 3.7 Write unit test: `validatePushPayload`
 
-- **What**: `vitest`; extract from SW for testability; assert valid payload passes, missing notification_id returns false
+- [x] **What**: `vitest`; extract from SW for testability; assert valid payload passes, missing notification_id returns false
 
 ### 3.8 Write unit test: SW dedupe logic
 
-- **What**: `vitest` with `self.registration` stubbed via `vi.stubGlobal`; assert duplicate tag closes existing notification
+- [x] **What**: `vitest` with `self.registration` stubbed via `vi.stubGlobal`; assert duplicate tag closes existing notification
 
 ---
 

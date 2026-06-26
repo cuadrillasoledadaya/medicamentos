@@ -5,7 +5,9 @@ import {
   requestNotificationPermission,
   getNotificationPermission,
   isIOS,
+  requestPushSubscription,
 } from './scheduler';
+import { getVapidPublicKeyStatic } from './useVapidPublicKey';
 
 const STORAGE_KEY = 'meds-notification-prompt-dismissed';
 
@@ -28,9 +30,18 @@ export function NotificationPermissionPrompt({ onDismiss }: Props) {
   }, []);
 
   const handleAllow = async () => {
-    await requestNotificationPermission();
+    const permission = await requestNotificationPermission();
     setShow(false);
     localStorage.setItem(STORAGE_KEY, 'true');
+
+    // If permission granted and VAPID key is configured, also subscribe to push
+    if (permission === 'granted' && getVapidPublicKeyStatic()) {
+      const result = await requestPushSubscription();
+      if (!result.ok) {
+        console.warn('[notif] Push subscription failed:', result.reason);
+      }
+    }
+
     onDismiss?.();
   };
 

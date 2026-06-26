@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
+import { supabase } from './lib/supabase';
 import { AuthProvider } from './features/auth/AuthProvider';
 import { setupOutboxReplay } from './features/tomas/outbox';
 import {
@@ -22,10 +23,14 @@ function NotificationActionHandler() {
     onTaken: (tomaId) => {
       markTaken.mutate({ tomaId, takenAt: new Date().toISOString() });
     },
-    onSnooze: (tomaId, minutes) => {
-      // Snooze: reschedule notification for later
-      // The actual snooze logic is handled by the SW timer
-      console.log(`[notif] Snoozed toma ${tomaId} for ${minutes} min`);
+    onSnooze: async (tomaId, _minutes) => {
+      // Call the snooze_toma RPC to reschedule by 10 minutes
+      const { error } = await (supabase.rpc as any)('snooze_toma', {
+        p_toma_id: tomaId,
+      });
+      if (error) {
+        console.error('[notif] Snooze RPC failed:', error.message);
+      }
     },
     onSkip: (tomaId, reason) => {
       markSkipped.mutate({ tomaId, reason });

@@ -96,6 +96,15 @@ export function isIOS(): boolean {
 }
 
 /**
+ * Detect if the PWA is running in standalone mode on iOS.
+ * Returns true if the app is installed as a home-screen PWA.
+ */
+export function isIOSStandalone(): boolean {
+  if (typeof window === 'undefined') return false;
+  return isIOS() && window.matchMedia('(display-mode: standalone)').matches;
+}
+
+/**
  * Get the notification reliability status.
  * Returns 'green' (likely delivered), 'yellow' (iOS — in-app only), or 'red' (permission denied).
  */
@@ -135,4 +144,40 @@ export function setupNotificationMessageHandler(
         break;
     }
   });
+}
+
+/**
+ * Request push subscription: permission + pushManager.subscribe + save to server.
+ *
+ * Returns { ok: true } on success, or { ok: false, reason } on failure.
+ * This is the entry point for new users enabling web_push.
+ */
+export async function requestPushSubscription(): Promise<
+  { ok: true } | { ok: false; reason: string }
+> {
+  // iOS check: web push only works in standalone PWA mode
+  if (isIOS() && !isIOSStandalone()) {
+    return { ok: false, reason: 'ios-not-standalone' };
+  }
+
+  // Check for Service Worker registration
+  if (!('serviceWorker' in navigator)) {
+    return { ok: false, reason: 'no-service-worker' };
+  }
+
+  const registration = await navigator.serviceWorker.ready;
+
+  // Check for PushManager support
+  if (!('PushManager' in window)) {
+    return { ok: false, reason: 'no-push-manager' };
+  }
+
+  try {
+    const { subscribeToPush } = await import('./pushSubscription');
+    await subscribeToPush(registration);
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return { ok: false, reason: message };
+  }
 }
