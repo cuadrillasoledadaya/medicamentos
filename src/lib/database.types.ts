@@ -536,6 +536,70 @@ export type Database = {
           created_at?: string;
         };
       };
+      push_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          device_name: string | null;
+          is_active: boolean;
+          created_at: string;
+          last_seen_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          device_name?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          last_seen_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          endpoint?: string;
+          p256dh?: string;
+          auth?: string;
+          device_name?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          last_seen_at?: string | null;
+        };
+      };
+      notification_deliveries: {
+        Row: {
+          id: string;
+          toma_id: string;
+          subscription_id: string;
+          channel: string;
+          sent_at: string;
+          status: string;
+          error_message: string | null;
+        };
+        Insert: {
+          id?: string;
+          toma_id: string;
+          subscription_id: string;
+          channel: string;
+          sent_at?: string;
+          status: string;
+          error_message?: string | null;
+        };
+        Update: {
+          id?: string;
+          toma_id?: string;
+          subscription_id?: string;
+          channel?: string;
+          sent_at?: string;
+          status?: string;
+          error_message?: string | null;
+        };
+      };
       dose_units: {
         Row: {
           value: string;
@@ -572,6 +636,17 @@ export type Database = {
           status: string;
         };
       };
+      tomas_due_for_push: {
+        Row: {
+          toma_id: string;
+          paciente_id: string;
+          scheduled_at: string;
+          medication_name: string;
+          dose_value: number;
+          dose_unit: string;
+          paciente_name: string;
+        };
+      };
     };
     Functions: {
       is_active_family_member: {
@@ -592,7 +667,7 @@ export type Database = {
       interaction_severity: 'info' | 'caution' | 'warning' | 'severe';
       family_role: 'owner_paciente' | 'cuidador_principal' | 'cuidador_secundario' | 'medico';
       family_membership_state: 'pending' | 'active' | 'revoked';
-      notification_channel: 'in_app' | 'email' | 'sms';
+      notification_channel: 'in_app' | 'email' | 'sms' | 'web_push';
     };
   };
 };
@@ -611,3 +686,5 @@ export type NotificationSetting = Database['public']['Tables']['notification_set
 export type Interaction = Database['public']['Tables']['interactions']['Row'];
 export type TemporadaReopenAudit = Database['public']['Tables']['temporada_reopen_audit']['Row'];
 export type PatientTripAdjustment = Database['public']['Tables']['patient_trip_adjustments']['Row'];
+export type PushSubscription = Database['public']['Tables']['push_subscriptions']['Row'];
+export type NotificationDelivery = Database['public']['Tables']['notification_deliveries']['Row'];
