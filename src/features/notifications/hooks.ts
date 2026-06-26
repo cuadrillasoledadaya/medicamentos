@@ -6,6 +6,8 @@ import {
   updateNotificationSetting,
   getMedicationOverrides,
   setMedicationOverride,
+  getPushSubscriptions,
+  revokePushSubscription,
 } from './api';
 
 export function useNotificationSettings(pacienteId: string) {
@@ -30,7 +32,7 @@ export function useUpdateNotificationSetting() {
       enabled,
     }: {
       pacienteId: string;
-      channel: 'in_app' | 'email' | 'sms';
+      channel: 'in_app' | 'email' | 'sms' | 'web_push';
       enabled: boolean;
     }) => updateNotificationSetting(pacienteId, channel, enabled),
     onSuccess: (_, { pacienteId }) => {
@@ -68,6 +70,32 @@ export function useSetMedicationOverride() {
     }) => setMedicationOverride(pacienteId, medicationId, channel, enabled),
     onSuccess: (_, { pacienteId }) => {
       queryClient.invalidateQueries({ queryKey: ['notification-overrides', pacienteId] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Push subscription hooks
+// ---------------------------------------------------------------------------
+
+export function usePushSubscriptions() {
+  return useQuery({
+    queryKey: ['push-subscriptions'],
+    queryFn: async () => {
+      const { data, error } = await getPushSubscriptions();
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useRevokePushSubscription() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (subscriptionId: string) => revokePushSubscription(subscriptionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['push-subscriptions'] });
     },
   });
 }
