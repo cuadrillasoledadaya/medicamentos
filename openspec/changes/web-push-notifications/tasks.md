@@ -159,23 +159,23 @@
 
 ### 4.1 Create `src/features/notifications/DeviceList.tsx`
 
-- **What**: List from `listMyPushSubscriptions()`; per-row Revoke button calling `unsubscribeFromPush(id)`; last-seen relative time; empty state when no subscriptions
+- [x] **What**: List from `listMyPushSubscriptions()`; per-row Revoke button calling `unsubscribeFromPush(id)`; last-seen relative time; empty state when no subscriptions
 
 ### 4.2 Modify `src/features/notifications/api.ts`
 
-- **What**: Add `getPushSubscriptions()`, `revokePushSubscription(id)`; extend channel union to `'in_app' | 'email' | 'sms' | 'web_push'` in `updateNotificationSetting`
+- [x] **What**: Add `getPushSubscriptions()`, `revokePushSubscription()`; extend channel union to `'in_app' | 'email' | 'sms' | 'web_push'` in `updateNotificationSetting`
 
 ### 4.3 Modify `src/features/notifications/hooks.ts`
 
-- **What**: Add `usePushSubscriptions(pacienteId)`, `useRevokePushSubscription()`; extend `useUpdateNotificationSetting` channel union
+- [x] **What**: Add `usePushSubscriptions(pacienteId)`, `useRevokePushSubscription()`; extend `useUpdateNotificationSetting` channel union
 
 ### 4.4 Modify `src/features/notifications/NotificationSettingsForm.tsx`
 
-- **What**: Add `web_push` to `channelDefs` (alwaysAvailable); render `DeviceList` when `web_push` enabled; if `isIOS() && !isIOSStandalone()` show yellow badge
+- [x] **What**: Add `web_push` to `channelDefs` (alwaysAvailable); render `DeviceList` when `web_push` enabled; if `isIOS() && !isIOSStandalone()` show yellow badge
 
 ### 4.5 Write unit test: DeviceList rendering
 
-- **What**: `vitest` + `@testing-library/react`; render with mock subscriptions; assert Revoke button + device name visible; test empty state
+- [x] **What**: `vitest` + `@testing-library/react`; render with mock subscriptions; assert Revoke button + device name visible; test empty state
 
 ---
 
