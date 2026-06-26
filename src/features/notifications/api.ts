@@ -19,7 +19,7 @@ export async function getNotificationSettings(
 
 export async function updateNotificationSetting(
   pacienteId: string,
-  channel: 'in_app' | 'email' | 'sms',
+  channel: 'in_app' | 'email' | 'sms' | 'web_push',
   enabled: boolean,
 ): Promise<{ data: NotificationSetting | null; error: Error | null }> {
   const { data, error } = await client
@@ -89,4 +89,57 @@ export async function logNotificationDelivered(
     .from('tomas')
     .update({ notes: newNotes })
     .eq('id', tomaId);
+}
+
+// ---------------------------------------------------------------------------
+// Push subscription management
+// ---------------------------------------------------------------------------
+
+/**
+ * List all active push subscriptions for the current user.
+ */
+export async function getPushSubscriptions(): Promise<{
+  data: Array<{
+    id: string;
+    endpoint: string;
+    device_name: string | null;
+    is_active: boolean;
+    created_at: string;
+    last_seen_at: string | null;
+  }> | null;
+  error: Error | null;
+}> {
+  const { data, error } = await client
+    .from('push_subscriptions')
+    .select('id, endpoint, device_name, is_active, created_at, last_seen_at')
+    .eq('is_active', true)
+    .order('created_at', { ascending: false });
+
+  return {
+    data: data as Array<{
+      id: string;
+      endpoint: string;
+      device_name: string | null;
+      is_active: boolean;
+      created_at: string;
+      last_seen_at: string | null;
+    }> | null,
+    error: error ? new Error(`Failed to list subscriptions: ${error.message}`) : null,
+  };
+}
+
+/**
+ * Revoke (deactivate) a push subscription by id.
+ */
+export async function revokePushSubscription(
+  subscriptionId: string,
+): Promise<{ data: null; error: Error | null }> {
+  const { error } = await (client.from('push_subscriptions') as any)
+    .update({ is_active: false })
+    .eq('id', subscriptionId);
+
+  return {
+    data: null,
+    error: error ? new Error(`Failed to revoke subscription: ${error.message}`) : null,
+  };
 }

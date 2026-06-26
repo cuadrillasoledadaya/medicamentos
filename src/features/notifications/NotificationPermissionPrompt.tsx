@@ -83,6 +83,13 @@ export function NotificationPermissionPrompt({ onDismiss }: Props) {
             Verás los recordatorios dentro de la app.
           </span>
         )}
+        <span style={{ display: 'block', marginTop: '0.5rem' }}>
+          Podés gestionar tus dispositivos y canales en{' '}
+          <a href="/notifications" style={{ color: '#0ea5e9' }}>
+            Configuración de notificaciones
+          </a>
+          .
+        </span>
       </p>
       <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
         <button
