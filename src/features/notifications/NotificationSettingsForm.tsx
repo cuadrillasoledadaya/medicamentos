@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import { useNotificationSettings, useUpdateNotificationSetting } from './hooks';
-import { requestNotificationPermission, getNotificationReliability } from './scheduler';
+import { requestNotificationPermission, getNotificationReliability, requestPushSubscription } from './scheduler';
+import { IosInstallBadge } from './IosInstallBadge';
+import { DeviceList } from './DeviceList';
 
 /**
  * Detect which notification channels are available based on env vars.
@@ -23,6 +25,7 @@ const channelDefs = [
   { key: 'in_app' as const, label: 'Notificaciones en la app', alwaysAvailable: true },
   { key: 'email' as const, label: 'Correo electrónico', alwaysAvailable: false, envKey: 'email' as const },
   { key: 'sms' as const, label: 'SMS', alwaysAvailable: false, envKey: 'sms' as const },
+  { key: 'web_push' as const, label: 'Notificaciones push del navegador', alwaysAvailable: true },
 ];
 
 interface Props {
@@ -35,18 +38,19 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
   const [permissionStatus, setPermissionStatus] = useState<string>(
     getNotificationReliability(),
   );
+  const [pushError, setPushError] = useState<string | null>(null);
 
   if (isLoading) return <p>Cargando ajustes de notificaciones...</p>;
 
   const isEnabled = (channel: string) => {
     const found = settings?.find((s) => s.channel === channel);
     if (found) return found.enabled;
-    // Defaults: in_app ON, email OFF, sms OFF
+    // Defaults: in_app ON, email OFF, sms OFF, web_push OFF
     return channel === 'in_app';
   };
 
   const handleToggle = async (
-    channel: 'in_app' | 'email' | 'sms',
+    channel: 'in_app' | 'email' | 'sms' | 'web_push',
     currentEnabled: boolean,
   ) => {
     if (channel === 'in_app' && !currentEnabled) {
@@ -54,6 +58,20 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
       const result = await requestNotificationPermission();
       setPermissionStatus(result);
       if (result !== 'granted') return;
+    }
+
+    if (channel === 'web_push' && !currentEnabled) {
+      // Request push subscription when enabling web_push
+      setPushError(null);
+      const result = await requestPushSubscription();
+      if (!result.ok) {
+        if (result.reason === 'ios-not-standalone') {
+          setPushError('En iPhone, las notificaciones push solo funcionan si la app está instalada en tu pantalla de inicio.');
+        } else {
+          setPushError(`No se pudo activar: ${result.reason}`);
+        }
+        return;
+      }
     }
 
     updateMutation.mutate({
@@ -76,6 +94,7 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
   };
 
   const availableChannels = getAvailableChannels();
+  const webPushEnabled = isEnabled('web_push');
 
   return (
     <div style={{ padding: '1rem' }}>
@@ -106,6 +125,27 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
           {reliabilityLabel[permissionStatus]}
         </span>
       </div>
+
+      {/* iOS install badge — shown above toggles when relevant */}
+      <IosInstallBadge />
+
+      {/* Push error message */}
+      {pushError && (
+        <div
+          style={{
+            padding: '0.5rem 0.75rem',
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '6px',
+            marginBottom: '0.75rem',
+            fontSize: '0.85rem',
+            color: '#dc2626',
+          }}
+          role="alert"
+        >
+          {pushError}
+        </div>
+      )}
 
       {/* Channel toggles */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -144,6 +184,9 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
           );
         })}
       </div>
+
+      {/* Device list — shown when web_push is enabled */}
+      {webPushEnabled && <DeviceList />}
     </div>
   );
 }
