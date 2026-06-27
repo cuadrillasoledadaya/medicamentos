@@ -16,7 +16,6 @@ vi.mock('@/features/notifications/hooks', () => ({
 }));
 
 // Mock parseDeviceName and unsubscribeFromPush
-const mockUnsubscribeFromPush = vi.fn().mockResolvedValue(true);
 vi.mock('@/features/notifications/pushSubscription', () => ({
   parseDeviceName: vi.fn((ua: string) => ua || 'Unknown browser'),
   unsubscribeFromPush: vi.fn().mockResolvedValue(true),
