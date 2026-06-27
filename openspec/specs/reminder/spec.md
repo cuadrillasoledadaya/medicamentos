@@ -1,4 +1,4 @@
-<!-- Synced from openspec/changes/web-push-notifications/ on 2026-06-26. Source-of-truth delta. -->
+<!-- Synced from openspec/changes/web-push-notifications/ on 2026-06-26. Synced from openspec/changes/web-push-ux-fixes/ on 2026-06-27. Source-of-truth delta. -->
 # Reminder / Notification Domain Specification
 
 ## Purpose
@@ -121,13 +121,23 @@ The system SHALL allow a user to create, list, and delete Web Push subscriptions
 - WHEN they open the Notification Settings page
 - THEN the UI SHALL display each subscription showing `device_name`, `created_at`, and a "Revoke" button
 
-#### Scenario: User revokes a subscription
+#### Scenario: User revokes a subscription — local unsubscribe + server deactivation
 
-- GIVEN a user has an active subscription with `id = sub_abc`
-- WHEN they click "Revoke" on that subscription
-- THEN the system SHALL set `active = false` on that row
+- GIVEN a user has an active push subscription in `push_subscriptions` with `id = sub_abc`
+- AND the browser's `pushManager` holds a live `PushSubscription` for the same endpoint
+- WHEN the user clicks "Revoke" on that subscription in `DeviceList`
+- THEN the browser SHALL call `PushSubscription.unsubscribe()` on the local subscription object
+- AND the system SHALL set `is_active = false` on the `push_subscriptions` row for `sub_abc` in Supabase
 - AND the device SHALL receive no further push notifications
 - AND the UI SHALL remove that subscription from the list
+
+#### Scenario: Revoke flow handles missing local subscription gracefully
+
+- GIVEN a user has a `push_subscriptions` row with `is_active = true` but the browser's `pushManager` has no matching subscription (e.g., already expired or cleared)
+- WHEN the user clicks "Revoke" on that subscription
+- THEN the system SHALL still set `is_active = false` on the server row
+- AND the UI SHALL remove that subscription from the list
+- AND no error SHALL be shown to the user
 
 ### Requirement: Scheduled Push Delivery
 
@@ -275,15 +285,4 @@ The system SHALL log every Web Push delivery attempt to a `notification_deliveri
 - WHEN the Web Push service responds
 - THEN the system SHALL insert a row into `notification_deliveries` with `status = 'failure'` and `error_message` containing the response code or body
 
----
 
-## Known Limitations (web-push-ux-fixes follow-up)
-
-The following scenarios from this spec are **not fully implemented** in the `web-push-notifications` change. They are deferred to a follow-up change `web-push-ux-fixes`. See `openspec/changes/archive/2026-06-26-web-push-notifications/verify-report.md` for full details.
-
-| ID | Requirement | Issue | Severity |
-|----|-------------|-------|----------|
-| A12 | SW: User taps "Taken" → navigate to `/today` | Code does not call `clients.openWindow('/today')` after postMessage | FAIL |
-| A14 | SW: User taps "Skip" → navigate to `/today` | Code does not call `clients.openWindow('/today')` after postMessage | FAIL |
-| A15 | SW: User taps notification body → open `/today` | Body tap early-returns; no navigation handler | FAIL |
-| F-02 | Web Push Subscription: Revoke flow | Local `PushSubscription.unsubscribe()` is never called; only server `is_active=false` | PARTIAL (caveat) |
