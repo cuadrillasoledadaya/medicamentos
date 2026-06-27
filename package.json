@@ -22,10 +22,10 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@10.15.0",
+  "packageManager": "npm@10.9.2",
   "devEngines": {
     "packageManager": {
-      "name": "pnpm",
+      "name": "npm",
       "version": "^10.0.0",
       "onFail": "warn"
     }
