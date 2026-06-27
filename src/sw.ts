@@ -165,6 +165,7 @@ self.addEventListener('notificationclick', (event) => {
     case 'taken':
       message.type = 'TAKEN';
       message.takenAt = new Date().toISOString();
+      event.waitUntil(self.clients.openWindow('/today'));
       break;
     case 'snooze':
       message.type = 'SNOOZE';
@@ -173,6 +174,7 @@ self.addEventListener('notificationclick', (event) => {
     case 'skip':
       message.type = 'SKIP';
       message.reason = 'notification-skip';
+      event.waitUntil(self.clients.openWindow('/today'));
       break;
   }
 
