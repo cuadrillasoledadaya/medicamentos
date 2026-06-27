@@ -27,26 +27,33 @@ Scope: single file, `tests/e2e/pacientes.spec.ts` lines 62–68. No production c
 ```ts
 const deleteBtn = page.getByRole('button', { name: /Eliminar|Delete/i }).first();
 if (await deleteBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-  await deleteBtn.click();
-  const confirmBtn = page.getByRole('button', { name: /Confirmar|Confirm|Sí|Yes/i });
+  // The app uses native window.confirm() (see src/pages/PacientesPage.tsx),
+  // NOT a custom in-DOM confirm button. Accept the dialog before clicking.
+  page.once('dialog', (dialog) => dialog.accept());
 
-  // Listener MUST be set up before the confirm click, so it cannot miss
+  // Listener MUST be set up before the delete click, so it cannot miss
   // the DELETE. Cascade across ~10 tables runs server-side; the assertion
   // clock now starts after the cascade has begun.
   const deleteResponse = page.waitForResponse(
-    (r) =>
-      r.request().method() === 'DELETE' &&
-      r.url().includes('/rest/v1/pacientes?id=eq.'),
+    (r) => {
+      const url = r.url();
+      const method = r.request().method();
+      const isDelete = method === 'DELETE' ||
+        (method === 'POST' && r.request().headers()['x-http-method-override'] === 'DELETE');
+      return isDelete && url.includes('/rest/v1/pacientes') && url.includes('id=eq.');
+    },
     { timeout: 15_000 },
   );
 
-  if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) await confirmBtn.click();
+  await deleteBtn.click();
   await deleteResponse;
 
   // Secondary safety net: catches a real slow-delete server-side bug.
   await expect(page.getByRole('list').getByText(name)).not.toBeVisible({ timeout: 10_000 });
 }
 ```
+
+> **Implementation note (added at archive time)**: the original `confirmBtn` lookup assumed a custom in-DOM confirm button. The app uses the native `window.confirm()` browser dialog, so that lookup is removed and a `page.once('dialog', dialog => dialog.accept())` handler is set up before the click. The `waitForResponse` predicate is also widened to catch `POST` with `X-HTTP-Method-override: DELETE`, which Supabase JS client v2.108+ may use. Both deviations are documented in `verify-report.md` and are necessary for the test to actually fire the DELETE.
 
 ## Timeout Strategy
 
