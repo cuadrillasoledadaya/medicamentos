@@ -15,13 +15,17 @@ vi.mock('@/features/notifications/hooks', () => ({
   useRevokePushSubscription: vi.fn(),
 }));
 
-// Mock parseDeviceName
+// Mock parseDeviceName and unsubscribeFromPush
 vi.mock('@/features/notifications/pushSubscription', () => ({
   parseDeviceName: vi.fn((ua: string) => ua || 'Unknown browser'),
+  unsubscribeFromPush: vi.fn().mockResolvedValue(true),
 }));
 
 const { usePushSubscriptions, useRevokePushSubscription } = await import(
   '@/features/notifications/hooks'
+);
+const { unsubscribeFromPush } = await import(
+  '@/features/notifications/pushSubscription'
 );
 
 function createWrapper() {
@@ -204,5 +208,91 @@ describe('DeviceList', () => {
     revokeButtons.forEach((btn) => {
       expect(btn).toBeDisabled();
     });
+  });
+
+  it('calls unsubscribeFromPush when local subscription matches revoked endpoint', async () => {
+    const revokeFn = vi.fn().mockResolvedValue({ data: null, error: null });
+    (usePushSubscriptions as any).mockReturnValue({
+      data: mockSubscriptions,
+      isLoading: false,
+      isError: false,
+    });
+    (useRevokePushSubscription as any).mockReturnValue({
+      mutateAsync: revokeFn,
+      isPending: false,
+    });
+
+    // Mock serviceWorker.ready.pushManager.getSubscription to return a matching sub
+    const mockSwRegistration = {
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue({
+          endpoint: mockSubscriptions[0].endpoint,
+        }),
+      },
+    };
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      serviceWorker: { ready: Promise.resolve(mockSwRegistration) },
+    });
+
+    render(<DeviceList />, { wrapper: createWrapper() });
+
+    const revokeButtons = screen.getAllByRole('button', { name: /eliminar/i });
+    fireEvent.click(revokeButtons[0]);
+
+    const confirmButton = screen.getByRole('button', { name: /^eliminar$/i });
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(revokeFn).toHaveBeenCalledWith('sub-1');
+    });
+
+    expect(unsubscribeFromPush).toHaveBeenCalled();
+    expect(mockSwRegistration.pushManager.getSubscription).toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
+  it('skips unsubscribeFromPush when local subscription endpoint does NOT match (cross-device revoke)', async () => {
+    const revokeFn = vi.fn().mockResolvedValue({ data: null, error: null });
+    (usePushSubscriptions as any).mockReturnValue({
+      data: mockSubscriptions,
+      isLoading: false,
+      isError: false,
+    });
+    (useRevokePushSubscription as any).mockReturnValue({
+      mutateAsync: revokeFn,
+      isPending: false,
+    });
+
+    // Mock serviceWorker with a DIFFERENT endpoint (simulates cross-device)
+    const mockSwRegistration = {
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue({
+          endpoint: 'https://fcm.googleapis.com/DIFFERENT_ENDPOINT',
+        }),
+      },
+    };
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      serviceWorker: { ready: Promise.resolve(mockSwRegistration) },
+    });
+
+    render(<DeviceList />, { wrapper: createWrapper() });
+
+    const revokeButtons = screen.getAllByRole('button', { name: /eliminar/i });
+    fireEvent.click(revokeButtons[0]);
+
+    const confirmButton = screen.getByRole('button', { name: /^eliminar$/i });
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(revokeFn).toHaveBeenCalledWith('sub-1');
+    });
+
+    // Server mutation ran, but unsubscribeFromPush was NOT called
+    expect(unsubscribeFromPush).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
   });
 });

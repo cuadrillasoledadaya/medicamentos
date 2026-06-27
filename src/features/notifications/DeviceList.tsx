@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { usePushSubscriptions, useRevokePushSubscription } from './hooks';
-import { parseDeviceName } from './pushSubscription';
+import { parseDeviceName, unsubscribeFromPush } from './pushSubscription';
 
 /**
  * Format a relative time string in Spanish.
@@ -76,9 +76,28 @@ export function DeviceList() {
   };
 
   const handleConfirmRevoke = async () => {
-    if (confirm.subscriptionId) {
-      await revokeMutation.mutateAsync(confirm.subscriptionId);
+    if (!confirm.subscriptionId) return;
+
+    // F-02: best-effort local unsubscribe before server cleanup
+    const target = subscriptions?.find(
+      (s) => s.id === confirm.subscriptionId,
+    );
+    const targetEndpoint = target?.endpoint ?? '';
+
+    if (targetEndpoint && 'serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const localSub = await registration.pushManager.getSubscription();
+        if (localSub && localSub.endpoint === targetEndpoint) {
+          await unsubscribeFromPush(registration, targetEndpoint);
+        }
+      } catch (err) {
+        console.warn('[DeviceList] local unsubscribe failed:', err);
+      }
     }
+
+    // Server-side cleanup ALWAYS runs
+    await revokeMutation.mutateAsync(confirm.subscriptionId);
     setConfirm({ isOpen: false, subscriptionId: null, deviceName: null });
   };
 
