@@ -157,7 +157,13 @@ self.addEventListener('notificationclick', (event) => {
   const tomaId = event.notification.tag?.replace('toma-', '');
   const action = event.action;
 
-  if (!tomaId || !action) return;
+  // Body tap (no action button) -> navigate to /today
+  if (!action) {
+    event.waitUntil(self.clients.openWindow('/today'));
+    return;
+  }
+
+  if (!tomaId) return; // orphan notification (no tag), safe no-op
 
   const message = { tomaId };
 
