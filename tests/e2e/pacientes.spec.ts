@@ -61,9 +61,27 @@ test.describe('Pacientes CRUD', () => {
 
     const deleteBtn = page.getByRole('button', { name: /Eliminar|Delete/i }).first();
     if (await deleteBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      // Accept the native window.confirm() dialog that the app uses.
+      page.once('dialog', (dialog) => dialog.accept());
+
+      // Listener MUST be set up before the delete click, so it cannot miss
+      // the DELETE. Cascade across ~10 tables runs server-side; the assertion
+      // clock now starts after the cascade has begun.
+      const deleteResponse = page.waitForResponse(
+        (r) => {
+          const url = r.url();
+          const method = r.request().method();
+          const isDelete = method === 'DELETE' ||
+            (method === 'POST' && r.request().headers()['x-http-method-override'] === 'DELETE');
+          return isDelete && url.includes('/rest/v1/pacientes') && url.includes('id=eq.');
+        },
+        { timeout: 15_000 },
+      );
+
       await deleteBtn.click();
-      const confirmBtn = page.getByRole('button', { name: /Confirmar|Confirm|Sí|Yes/i });
-      if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) await confirmBtn.click();
+      await deleteResponse;
+
+      // Secondary safety net: catches a real slow-delete server-side bug.
       await expect(page.getByRole('list').getByText(name)).not.toBeVisible({ timeout: 10_000 });
     }
   });
