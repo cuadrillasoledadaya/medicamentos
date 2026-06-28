@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NotificationSettingsForm } from '@/features/notifications/NotificationSettingsForm';
 
@@ -36,11 +36,18 @@ vi.mock('@/features/notifications/scheduler', () => ({
   requestPushSubscription: vi.fn().mockResolvedValue({ ok: true }),
   isIOS: vi.fn().mockReturnValue(false),
   isIOSStandalone: vi.fn().mockReturnValue(false),
+  mapSubscriptionErrorToSpanish: vi.fn((reason: string) => {
+    if (reason === 'NotAllowedError') return 'Tu navegador bloqueó la suscripción. Usá una ventana normal o verificá los permisos.';
+    if (reason === 'AbortError') return 'La suscripción se canceló. Intentá de nuevo.';
+    if (reason === 'SecurityError') return 'La suscripción push no está disponible en este contexto (HTTP sin SSL o iframe).';
+    return 'No se pudo activar las notificaciones push. Intentá de nuevo.';
+  }),
 }));
 
 const { useNotificationSettings, useUpdateNotificationSetting, usePushSubscriptions, useRevokePushSubscription } = await import(
   '@/features/notifications/hooks'
 );
+const { requestPushSubscription } = await import('@/features/notifications/scheduler');
 
 function createWrapper() {
   const qc = new QueryClient({
@@ -216,5 +223,60 @@ describe('NotificationSettingsForm', () => {
 
     render(<NotificationSettingsForm pacienteId="pac-1" />, { wrapper: createWrapper() });
     expect(screen.queryByText('Dispositivos conectados')).not.toBeInTheDocument();
+  });
+
+  it('mutate called before subscribe when rejecting — checkbox stays checked, Spanish banner shown', async () => {
+    const mutateFn = vi.fn();
+    (useNotificationSettings as any).mockReturnValue({
+      data: [{ channel: 'in_app', enabled: true }],
+      isLoading: false,
+    });
+    (useUpdateNotificationSetting as any).mockReturnValue({
+      mutate: mutateFn,
+      isPending: false,
+    });
+    (usePushSubscriptions as any).mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+    });
+    (useRevokePushSubscription as any).mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    });
+    vi.mocked(requestPushSubscription).mockResolvedValueOnce({
+      ok: false,
+      reason: 'NotAllowedError',
+    });
+
+    render(<NotificationSettingsForm pacienteId="pac-1" />, { wrapper: createWrapper() });
+
+    // Find and click the web_push checkbox
+    const checkboxes = screen.getAllByRole('checkbox');
+    const webPushCheckbox = checkboxes.find(
+      (cb) => (cb as HTMLInputElement).parentElement?.textContent?.includes('push'),
+    )!;
+    fireEvent.click(webPushCheckbox);
+
+    // Assert mutate was called FIRST with enabled:true
+    expect(mutateFn).toHaveBeenCalledWith({
+      pacienteId: 'pac-1',
+      channel: 'web_push',
+      enabled: true,
+    });
+
+    // Spanish banner text appears after async handshake resolves
+    expect(
+      await screen.findByText('Tu navegador bloqueó la suscripción. Usá una ventana normal o verificá los permisos.'),
+    ).toBeInTheDocument();
+
+    // Checkbox stays checked after failure (user intent preserved)
+    expect((webPushCheckbox as HTMLInputElement).checked).toBe(true);
+
+    // Raw NotAllowedError is NOT in the DOM
+    expect(screen.queryByText('NotAllowedError')).not.toBeInTheDocument();
+
+    // Reintentar button is in the DOM
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
   });
 });

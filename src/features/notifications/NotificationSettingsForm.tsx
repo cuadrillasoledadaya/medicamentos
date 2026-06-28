@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useNotificationSettings, useUpdateNotificationSetting } from './hooks';
-import { requestNotificationPermission, getNotificationReliability, requestPushSubscription } from './scheduler';
+import { requestNotificationPermission, getNotificationReliability, requestPushSubscription, mapSubscriptionErrorToSpanish } from './scheduler';
 import { IosInstallBadge } from './IosInstallBadge';
 import { DeviceList } from './DeviceList';
 
@@ -28,6 +28,8 @@ const channelDefs = [
   { key: 'web_push' as const, label: 'Notificaciones push del navegador', alwaysAvailable: true },
 ];
 
+type PushSubscriptionState = 'idle' | 'pending' | 'subscribed' | 'failed';
+
 interface Props {
   pacienteId: string;
 }
@@ -39,6 +41,7 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
     getNotificationReliability(),
   );
   const [pushError, setPushError] = useState<string | null>(null);
+  const [pushSubscriptionState, setPushSubscriptionState] = useState<PushSubscriptionState>('idle');
 
   if (isLoading) return <p>Cargando ajustes de notificaciones...</p>;
 
@@ -61,17 +64,32 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
     }
 
     if (channel === 'web_push' && !currentEnabled) {
-      // Request push subscription when enabling web_push
+      // Save preference FIRST, then attempt push handshake
       setPushError(null);
+      updateMutation.mutate({
+        pacienteId,
+        channel,
+        enabled: true,
+      });
+      setPushSubscriptionState('pending');
       const result = await requestPushSubscription();
       if (!result.ok) {
         if (result.reason === 'ios-not-standalone') {
           setPushError('En iPhone, las notificaciones push solo funcionan si la app está instalada en tu pantalla de inicio.');
         } else {
-          setPushError(`No se pudo activar: ${result.reason}`);
+          setPushError(mapSubscriptionErrorToSpanish(result.reason));
         }
+        setPushSubscriptionState('failed');
         return;
       }
+      setPushSubscriptionState('subscribed');
+      return;
+    }
+
+    // Disabling web_push or any other channel
+    if (channel === 'web_push' && currentEnabled) {
+      setPushSubscriptionState('idle');
+      setPushError(null);
     }
 
     updateMutation.mutate({
@@ -79,6 +97,22 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
       channel,
       enabled: !currentEnabled,
     });
+  };
+
+  const handleRetry = async () => {
+    setPushError(null);
+    setPushSubscriptionState('pending');
+    const result = await requestPushSubscription();
+    if (!result.ok) {
+      if (result.reason === 'ios-not-standalone') {
+        setPushError('En iPhone, las notificaciones push solo funcionan si la app está instalada en tu pantalla de inicio.');
+      } else {
+        setPushError(mapSubscriptionErrorToSpanish(result.reason));
+      }
+      setPushSubscriptionState('failed');
+      return;
+    }
+    setPushSubscriptionState('subscribed');
   };
 
   const reliabilityLabel: Record<string, string> = {
@@ -94,7 +128,8 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
   };
 
   const availableChannels = getAvailableChannels();
-  const webPushEnabled = isEnabled('web_push');
+  const webPushEnabled = isEnabled('web_push') || pushSubscriptionState === 'subscribed';
+  const isPending = pushSubscriptionState === 'pending';
 
   return (
     <div style={{ padding: '1rem' }}>
@@ -129,21 +164,42 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
       {/* iOS install badge — shown above toggles when relevant */}
       <IosInstallBadge />
 
-      {/* Push error message */}
+      {/* Push error / retry banner */}
       {pushError && (
         <div
           style={{
             padding: '0.5rem 0.75rem',
-            background: '#fef2f2',
-            border: '1px solid #fecaca',
+            background: '#fef9c3',
+            border: '1px solid #fde047',
             borderRadius: '6px',
             marginBottom: '0.75rem',
             fontSize: '0.85rem',
-            color: '#dc2626',
+            color: '#854d0e',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.5rem',
           }}
           role="alert"
+          aria-live="assertive"
         >
-          {pushError}
+          <span>{pushError}</span>
+          <button
+            onClick={handleRetry}
+            disabled={isPending}
+            style={{
+              padding: '0.25rem 0.5rem',
+              fontSize: '0.8rem',
+              borderRadius: '4px',
+              border: '1px solid #ca8a04',
+              background: isPending ? '#e5e7eb' : '#fde047',
+              color: isPending ? '#9ca3af' : '#854d0e',
+              cursor: isPending ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {isPending ? 'Pendiente…' : 'Reintentar'}
+          </button>
         </div>
       )}
 
@@ -153,6 +209,11 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
           const enabled = isEnabled(key);
           const envAvailable = alwaysAvailable || (envKey ? availableChannels[envKey] : false);
           const available = envAvailable;
+          const isWebPush = key === 'web_push';
+          // For web_push, show as checked when local state indicates user intent
+          const isChecked = isWebPush
+            ? enabled || pushSubscriptionState === 'subscribed' || pushSubscriptionState === 'failed' || pushSubscriptionState === 'pending'
+            : enabled;
 
           return (
             <label
@@ -166,11 +227,12 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
             >
               <input
                 type="checkbox"
-                checked={enabled}
+                checked={isChecked}
                 onChange={() => handleToggle(key, enabled)}
-                disabled={!available || updateMutation.isPending}
+                disabled={!available || updateMutation.isPending || (isWebPush && isPending)}
               />
               <span>{label}</span>
+              {isWebPush && <PushSubscriptionBadge state={pushSubscriptionState} />}
               {!alwaysAvailable && (
                 <span style={{ fontSize: '0.75rem', color: '#888' }}>
                   {available
@@ -188,5 +250,37 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
       {/* Device list — shown when web_push is enabled */}
       {webPushEnabled && <DeviceList />}
     </div>
+  );
+}
+
+/** Inline badge showing push subscription state next to the web_push label. */
+function PushSubscriptionBadge({ state }: { state: PushSubscriptionState }) {
+  if (state === 'idle') return null;
+
+  const dotColor = state === 'subscribed' ? '#16a34a' : state === 'failed' ? '#eab308' : '#9ca3af';
+  const text = state === 'subscribed' ? 'Push activo' : state === 'failed' ? 'Push no configurado' : 'Pendiente…';
+
+  return (
+    <span
+      aria-live="polite"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.35rem',
+        fontSize: '0.75rem',
+        color: dotColor,
+      }}
+    >
+      <span
+        style={{
+          width: '8px',
+          height: '8px',
+          borderRadius: '50%',
+          background: dotColor,
+          display: 'inline-block',
+        }}
+      />
+      {text}
+    </span>
   );
 }
