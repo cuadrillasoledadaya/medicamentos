@@ -56,13 +56,19 @@ async function sendWebPush(
     p256dh: string;
     auth: string;
   }>,
+  alertFlags?: {
+    require_interaction: boolean;
+    vibrate: boolean;
+    renotify: boolean;
+    badge: boolean;
+  } | null,
 ): Promise<Array<{ subscriptionId: string; status: string; error?: string }>> {
   if (!vapidConfigured) {
     console.log('[notify-fallback] web-push skipped (no VAPID keys)');
     return [];
   }
 
-  const payload = buildPushPayload(toma);
+  const payload = buildPushPayload(toma, alertFlags);
   if (!payload) {
     console.error('[notify-fallback] Failed to build push payload for toma', toma.toma_id);
     return [];
@@ -314,7 +320,16 @@ Deno.serve(async (req) => {
         console.error(`[notify-fallback] Failed to fetch subscribers: ${subError.message}`);
         results.web_push = { enabled: true, success: false, error: subError.message };
       } else if (subscribers && subscribers.length > 0) {
-        const pushResults = await sendWebPush(toma, subscribers);
+        // Read alert behavior flags from the web_push settings row
+        const webPushSettings = settings?.find((s) => s.channel === 'web_push');
+        const alertFlags = webPushSettings ? {
+          require_interaction: webPushSettings.require_interaction ?? true,
+          vibrate: webPushSettings.vibrate ?? true,
+          renotify: webPushSettings.renotify ?? true,
+          badge: webPushSettings.badge ?? true,
+        } : null;
+
+        const pushResults = await sendWebPush(toma, subscribers, alertFlags);
         const allSent = pushResults.every((r) => r.status === 'sent');
         results.web_push = {
           enabled: true,

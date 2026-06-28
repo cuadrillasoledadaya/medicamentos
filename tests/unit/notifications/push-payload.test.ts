@@ -90,6 +90,92 @@ describe('buildPushPayload', () => {
     const result = buildPushPayload(toma);
     expect(result).toBeNull();
   });
+
+  it('includes 4 alert behavior flags with defaults TRUE when settings is null', () => {
+    const toma = {
+      toma_id: '550e8400-e29b-41d4-a716-446655440000',
+      paciente_id: '660e8400-e29b-41d4-a716-446655440001',
+      scheduled_at: '2026-06-26T08:00:00Z',
+      medication_name: 'Losartán',
+      dose_value: 50,
+      dose_unit: 'mg',
+      paciente_name: 'Abuela Rosa',
+    };
+
+    const result = buildPushPayload(toma, null);
+    expect(result).not.toBeNull();
+    expect(result!.requireInteraction).toBe(true);
+    expect(result!.vibrate).toBe(true);
+    expect(result!.renotify).toBe(true);
+    expect(result!.badge).toBe(true);
+  });
+
+  it('reads alert behavior flags from settings when provided', () => {
+    const toma = {
+      toma_id: '550e8400-e29b-41d4-a716-446655440000',
+      paciente_id: '660e8400-e29b-41d4-a716-446655440001',
+      scheduled_at: '2026-06-26T08:00:00Z',
+      medication_name: 'Losartán',
+      dose_value: 50,
+      dose_unit: 'mg',
+      paciente_name: 'Abuela Rosa',
+    };
+    const settings = {
+      require_interaction: false,
+      vibrate: true,
+      renotify: false,
+      badge: true,
+    };
+
+    const result = buildPushPayload(toma, settings);
+    expect(result).not.toBeNull();
+    expect(result!.requireInteraction).toBe(false);
+    expect(result!.vibrate).toBe(true);
+    expect(result!.renotify).toBe(false);
+    expect(result!.badge).toBe(true);
+  });
+
+  it('payload with 4 alert flags still stays under 500 bytes', () => {
+    const toma = {
+      toma_id: '550e8400-e29b-41d4-a716-446655440000',
+      paciente_id: '660e8400-e29b-41d4-a716-446655440001',
+      scheduled_at: '2026-06-26T08:00:00Z',
+      medication_name: 'Losartán 50mg',
+      dose_value: 50,
+      dose_unit: 'mg',
+      paciente_name: 'Abuela Rosa García Martínez',
+    };
+
+    const result = buildPushPayload(toma, null);
+    expect(result).not.toBeNull();
+    const bytes = new TextEncoder().encode(JSON.stringify(result)).length;
+    expect(bytes).toBeLessThan(500);
+  });
+
+  it('round-trips through validatePushPayload with the 4 new fields', () => {
+    const toma = {
+      toma_id: '550e8400-e29b-41d4-a716-446655440000',
+      paciente_id: '660e8400-e29b-41d4-a716-446655440001',
+      scheduled_at: '2026-06-26T08:00:00Z',
+      medication_name: 'Test',
+      dose_value: 1,
+      dose_unit: 'mg',
+      paciente_name: 'Test',
+    };
+
+    const payload = buildPushPayload(toma, null);
+    expect(payload).not.toBeNull();
+
+    const serialized = JSON.stringify(payload);
+    const parsed = JSON.parse(serialized);
+    const revalidated = validatePushPayload(parsed);
+
+    expect(revalidated).not.toBeNull();
+    expect(revalidated!.requireInteraction).toBe(true);
+    expect(revalidated!.vibrate).toBe(true);
+    expect(revalidated!.renotify).toBe(true);
+    expect(revalidated!.badge).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------

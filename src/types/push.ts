@@ -49,6 +49,11 @@ export const pushPayloadSchema = z.object({
   unit: z.string().min(1),
   scheduled_at: z.string(),
   action_url: z.string().min(1),
+  // Alert behavior flags — default to TRUE so the schema is forward-compatible
+  requireInteraction: z.boolean(),
+  vibrate: z.boolean(),
+  renotify: z.boolean(),
+  badge: z.boolean(),
 });
 
 export type PushPayload = z.infer<typeof pushPayloadSchema>;
@@ -76,7 +81,12 @@ export function buildPushPayload(toma: {
   dose_value: number | null;
   dose_unit: string | null;
   paciente_name: string;
-}): PushPayload | null {
+}, settings?: {
+  require_interaction?: boolean;
+  vibrate?: boolean;
+  renotify?: boolean;
+  badge?: boolean;
+} | null): PushPayload | null {
   const hasDose = toma.dose_value != null && toma.dose_unit != null && toma.dose_unit.trim() !== '';
   const dose = hasDose ? `${toma.dose_value} ${toma.dose_unit}`.trim() : 'No especificada';
   const unit = hasDose ? toma.dose_unit! : 'unidad';
@@ -91,6 +101,10 @@ export function buildPushPayload(toma: {
     unit,
     scheduled_at: toma.scheduled_at,
     action_url: '/today',
+    requireInteraction: settings?.require_interaction ?? true,
+    vibrate: settings?.vibrate ?? true,
+    renotify: settings?.renotify ?? true,
+    badge: settings?.badge ?? true,
   });
 }
 

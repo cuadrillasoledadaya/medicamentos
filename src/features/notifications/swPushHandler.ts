@@ -24,6 +24,11 @@ const swPushPayloadSchema = z.object({
   unit: z.string().min(1),
   scheduled_at: z.string(),
   action_url: z.string().min(1),
+  // Alert behavior flags — default to TRUE so the schema is forward-compatible
+  requireInteraction: z.boolean(),
+  vibrate: z.boolean(),
+  renotify: z.boolean(),
+  badge: z.boolean(),
 });
 
 export type SwPushPayload = z.infer<typeof swPushPayloadSchema>;
@@ -106,11 +111,11 @@ export function decidePushAction(
 export function buildNotificationOptions(
   payload: SwPushPayload,
 ): NotificationOptions {
-  return {
+  const opts: NotificationOptions = {
     body: `${payload.medication_name} — ${payload.dose} (${payload.scheduled_at})`,
     tag: payload.notification_id,
     icon: '/pwa-192x192.png',
-    requireInteraction: false,
+    requireInteraction: payload.requireInteraction,
     actions: [
       { action: 'taken', title: 'Marcar como tomada', icon: '/pwa-192x192.png' },
       { action: 'snooze', title: 'Posponer 10 min', icon: '/pwa-192x192.png' },
@@ -121,5 +126,9 @@ export function buildNotificationOptions(
       action_url: payload.action_url,
       paciente_id: payload.paciente_id,
     },
-  } as NotificationOptions;
+  };
+  if (payload.vibrate)  opts.vibrate  = [200, 100, 200, 100, 200];
+  if (payload.renotify) opts.renotify = true;
+  if (payload.badge)    opts.badge    = '/pwa-192x192.png';
+  return opts;
 }
