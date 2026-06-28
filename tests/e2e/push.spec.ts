@@ -197,6 +197,86 @@ test.describe('Web Push Notifications', () => {
     expect(deviceListVisible || isEmptyVisible).toBeTruthy();
   });
 
+  // --- New: Happy path with granted permissions (task 7) ---
+
+  test('web_push toggle shows Push activo badge with granted permissions', async ({ browser }) => {
+    test.skip(!hasVapidKey(), 'VITE_VAPID_PUBLIC_KEY not configured');
+
+    const context = await browser.newContext({
+      permissions: ['notifications'],
+    });
+    const page = await context.newPage();
+
+    await loginAsUserA(page);
+
+    const hasPush = await page.evaluate(() => 'PushManager' in window);
+    test.skip(!hasPush, 'PushManager not supported in this browser');
+
+    const swReady = await waitForServiceWorker(page);
+    test.skip(!swReady, 'Service Worker not ready');
+
+    await page.goto('/notifications');
+    await page.waitForLoadState('networkidle');
+
+    const webPushToggle = page.getByLabel(/Notificaciones push del navegador/i);
+    const isVisible = await webPushToggle.isVisible({ timeout: 5000 }).catch(() => false);
+    if (!isVisible) {
+      test.skip(true, 'web_push toggle not found');
+    }
+
+    const isChecked = await webPushToggle.isChecked();
+    if (!isChecked) {
+      await webPushToggle.click();
+      await page.waitForTimeout(2000);
+    }
+
+    // Assert badge appears
+    const badgeVisible = await page.getByText('Push activo').isVisible({ timeout: 5000 }).catch(() => false);
+    expect(badgeVisible).toBeTruthy();
+
+    await context.close();
+  });
+
+  // --- New: Denied permission path (task 7) ---
+
+  test('web_push toggle shows Spanish banner + Reintentar when permission denied', async ({ browser }) => {
+    const context = await browser.newContext();
+
+    // Override Notification.permission to 'denied' before page load
+    await context.addInitScript(() => {
+      Object.defineProperty(Notification, 'permission', { get: () => 'denied' });
+    });
+
+    const page = await context.newPage();
+    await loginAsUserA(page);
+
+    await page.goto('/notifications');
+    await page.waitForLoadState('networkidle');
+
+    const webPushToggle = page.getByLabel(/Notificaciones push del navegador/i);
+    const isVisible = await webPushToggle.isVisible({ timeout: 5000 }).catch(() => false);
+    if (!isVisible) {
+      test.skip(true, 'web_push toggle not found');
+    }
+
+    await webPushToggle.click();
+    await page.waitForTimeout(1000);
+
+    // Assert yellow banner with Spanish text appears
+    const bannerVisible = await page.getByText(/Tu navegador bloqueó la suscripción|No se pudo activar/).isVisible({ timeout: 5000 }).catch(() => false);
+    expect(bannerVisible).toBeTruthy();
+
+    // Assert Reintentar button is visible
+    const retryVisible = await page.getByRole('button', { name: 'Reintentar' }).isVisible({ timeout: 3000 }).catch(() => false);
+    expect(retryVisible).toBeTruthy();
+
+    // Assert raw error name is NOT visible
+    const rawErrorVisible = await page.getByText('NotAllowedError').isVisible({ timeout: 1000 }).catch(() => true);
+    expect(rawErrorVisible).toBeFalsy();
+
+    await context.close();
+  });
+
   // --- Disable + Revoke ---
 
   test('revoke subscription removes row from DeviceList', async ({ page }) => {
