@@ -534,4 +534,75 @@ test.describe('Web Push Notifications', () => {
     expect(messageData.tomaId).toBe('test-toma-skip');
     expect(messageData.reason).toBe('notification-skip');
   });
+
+  // --- Alert Behavior Sub-toggles E2E ---
+
+  test('toggle vibrate OFF → simulated push has no vibrate key', async ({ page }) => {
+    test.skip(true, 'Requires production SW build — covered by unit tests in swPushHandler.test.ts');
+
+    await loginAsUserA(page);
+
+    const swReady = await waitForServiceWorker(page);
+    test.skip(!swReady, 'Service Worker not ready');
+
+    await page.goto('/notifications');
+    await page.waitForLoadState('networkidle');
+
+    // Enable web_push if not already
+    const webPushToggle = page.getByLabel(/Notificaciones push del navegador/i);
+    const isChecked = await webPushToggle.isChecked();
+    if (!isChecked) {
+      await webPushToggle.click();
+      await page.waitForTimeout(2000);
+    }
+
+    // Toggle vibrate OFF
+    const vibrateCheckbox = page.getByRole('checkbox', { name: /Vibrar al recibir/i });
+    const vibrateChecked = await vibrateCheckbox.isChecked();
+    if (vibrateChecked) {
+      await vibrateCheckbox.click();
+      await page.waitForTimeout(500);
+    }
+
+    // Simulate push via test hook
+    await page.evaluate(async (payload) => {
+      const reg = await navigator.serviceWorker.ready;
+      if (!reg.active) throw new Error('No active SW');
+      reg.active.postMessage({ type: 'TEST_SIMULATE_PUSH', payload });
+    }, {
+      notification_id: 'test-toma-vibrate-off',
+      type: 'medication_reminder',
+      paciente_id: 'test-pac-001',
+      paciente_name: 'Test Paciente',
+      medication_name: 'Paracetamol',
+      dose: '500 mg',
+      unit: 'mg',
+      scheduled_at: new Date().toISOString(),
+      action_url: '/today',
+      requireInteraction: true,
+      vibrate: false,
+      renotify: true,
+      badge: true,
+    });
+
+    await page.waitForTimeout(1000);
+
+    // Verify notification was shown without vibrate
+    const hasNotification = await page.evaluate(async (tag) => {
+      const reg = await navigator.serviceWorker.ready;
+      const notifications = await reg.getNotifications();
+      return notifications.some((n: Notification) => n.tag === tag);
+    }, 'test-toma-vibrate-off');
+
+    expect(hasNotification).toBeTruthy();
+
+    const vibrateInNotif = await page.evaluate(async (tag) => {
+      const reg = await navigator.serviceWorker.ready;
+      const notifications = await reg.getNotifications();
+      const notif = notifications.find((n: Notification) => n.tag === tag);
+      return notif?.vibrate !== undefined;
+    }, 'test-toma-vibrate-off');
+
+    expect(vibrateInNotif).toBeFalsy();
+  });
 });
