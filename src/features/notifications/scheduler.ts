@@ -147,6 +147,24 @@ export function setupNotificationMessageHandler(
 }
 
 /**
+ * Map a DOMException name or failure reason to a user-friendly Spanish message.
+ * Unknown reasons are logged to console.warn with a truncated userAgent for debugging.
+ */
+export function mapSubscriptionErrorToSpanish(reason: string): string {
+  switch (reason) {
+    case 'NotAllowedError':
+      return 'Tu navegador bloqueó la suscripción. Usá una ventana normal o verificá los permisos.';
+    case 'AbortError':
+      return 'La suscripción se canceló. Intentá de nuevo.';
+    case 'SecurityError':
+      return 'La suscripción push no está disponible en este contexto (HTTP sin SSL o iframe).';
+    default:
+      console.warn(reason, { userAgent: navigator.userAgent.slice(0, 80) });
+      return 'No se pudo activar las notificaciones push. Intentá de nuevo.';
+  }
+}
+
+/**
  * Request push subscription: permission + pushManager.subscribe + save to server.
  *
  * Returns { ok: true } on success, or { ok: false, reason } on failure.
@@ -177,6 +195,9 @@ export async function requestPushSubscription(): Promise<
     await subscribeToPush(registration);
     return { ok: true };
   } catch (err) {
+    console.warn('[push-subscription] handshake failed:', err, {
+      userAgent: navigator.userAgent,
+    });
     const message = err instanceof Error ? err.message : 'Unknown error';
     return { ok: false, reason: message };
   }
