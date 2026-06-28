@@ -279,4 +279,241 @@ describe('NotificationSettingsForm', () => {
     // Reintentar button is in the DOM
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
   });
+
+  it('toggle OFF resets state to idle and does not call subscribe', async () => {
+    const mutateFn = vi.fn();
+    // Start with web_push already enabled in settings
+    (useNotificationSettings as any).mockReturnValue({
+      data: [{ channel: 'in_app', enabled: true }, { channel: 'web_push', enabled: true }],
+      isLoading: false,
+    });
+    (useUpdateNotificationSetting as any).mockReturnValue({
+      mutate: mutateFn,
+      isPending: false,
+    });
+    (usePushSubscriptions as any).mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+    });
+    (useRevokePushSubscription as any).mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    });
+
+    render(<NotificationSettingsForm pacienteId="pac-1" />, { wrapper: createWrapper() });
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    const webPushCheckbox = checkboxes.find(
+      (cb) => (cb as HTMLInputElement).parentElement?.textContent?.includes('push'),
+    )!;
+
+    // Toggle OFF — should NOT call requestPushSubscription
+    fireEvent.click(webPushCheckbox);
+
+    // Mutate called with enabled: false
+    expect(mutateFn).toHaveBeenCalledWith({
+      pacienteId: 'pac-1',
+      channel: 'web_push',
+      enabled: false,
+    });
+
+    // requestPushSubscription was NOT called (no subscribe on toggle-OFF)
+    expect(requestPushSubscription).not.toHaveBeenCalled();
+
+    // No badge visible (state is idle)
+    expect(screen.queryByText('Push activo')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pendiente…')).not.toBeInTheDocument();
+    expect(screen.queryByText('Push no configurado')).not.toBeInTheDocument();
+  });
+
+  it('toggle is disabled while pending', async () => {
+    const mutateFn = vi.fn();
+    (useNotificationSettings as any).mockReturnValue({
+      data: [{ channel: 'in_app', enabled: true }],
+      isLoading: false,
+    });
+    (useUpdateNotificationSetting as any).mockReturnValue({
+      mutate: mutateFn,
+      isPending: false,
+    });
+    (usePushSubscriptions as any).mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+    });
+    (useRevokePushSubscription as any).mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    });
+    // Return a never-resolving promise to keep state pending
+    let resolvePromise: () => void;
+    const pendingPromise = new Promise((resolve) => {
+      resolvePromise = resolve as () => void;
+    });
+    vi.mocked(requestPushSubscription).mockReturnValueOnce(pendingPromise as any);
+
+    render(<NotificationSettingsForm pacienteId="pac-1" />, { wrapper: createWrapper() });
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    const webPushCheckbox = checkboxes.find(
+      (cb) => (cb as HTMLInputElement).parentElement?.textContent?.includes('push'),
+    )!;
+
+    fireEvent.click(webPushCheckbox);
+
+    // Wait for pending badge to appear
+    await screen.findByText('Pendiente…');
+
+    // Checkbox is disabled while pending
+    expect((webPushCheckbox as HTMLInputElement).disabled).toBe(true);
+
+    // Clean up: resolve the pending promise with a value to avoid unhandled rejection
+    resolvePromise!({ ok: true } as any);
+    // Wait for React to process the state update
+    await new Promise((r) => setTimeout(r, 0));
+  });
+
+  it('unknown error maps to fallback Spanish message', async () => {
+    const mutateFn = vi.fn();
+    (useNotificationSettings as any).mockReturnValue({
+      data: [{ channel: 'in_app', enabled: true }],
+      isLoading: false,
+    });
+    (useUpdateNotificationSetting as any).mockReturnValue({
+      mutate: mutateFn,
+      isPending: false,
+    });
+    (usePushSubscriptions as any).mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+    });
+    (useRevokePushSubscription as any).mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    });
+    vi.mocked(requestPushSubscription).mockResolvedValueOnce({
+      ok: false,
+      reason: 'SomeWeirdError',
+    });
+
+    render(<NotificationSettingsForm pacienteId="pac-1" />, { wrapper: createWrapper() });
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    const webPushCheckbox = checkboxes.find(
+      (cb) => (cb as HTMLInputElement).parentElement?.textContent?.includes('push'),
+    )!;
+    fireEvent.click(webPushCheckbox);
+
+    expect(mutateFn).toHaveBeenCalledWith({
+      pacienteId: 'pac-1',
+      channel: 'web_push',
+      enabled: true,
+    });
+
+    // Fallback Spanish message appears in the banner
+    await waitFor(() => {
+      expect(screen.getByText(/No se pudo activar las notificaciones push/)).toBeInTheDocument();
+    });
+
+    // Raw error name is NOT in the DOM
+    expect(screen.queryByText('SomeWeirdError')).not.toBeInTheDocument();
+  });
+
+  it('DeviceList renders after successful subscribe', async () => {
+    const mutateFn = vi.fn();
+    (useNotificationSettings as any).mockReturnValue({
+      data: [{ channel: 'in_app', enabled: true }],
+      isLoading: false,
+    });
+    (useUpdateNotificationSetting as any).mockReturnValue({
+      mutate: mutateFn,
+      isPending: false,
+    });
+    (usePushSubscriptions as any).mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+    });
+    (useRevokePushSubscription as any).mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    });
+    vi.mocked(requestPushSubscription).mockResolvedValueOnce({ ok: true });
+
+    render(<NotificationSettingsForm pacienteId="pac-1" />, { wrapper: createWrapper() });
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    const webPushCheckbox = checkboxes.find(
+      (cb) => (cb as HTMLInputElement).parentElement?.textContent?.includes('push'),
+    )!;
+    fireEvent.click(webPushCheckbox);
+
+    // Success → subscribed state
+    await screen.findByText('Push activo');
+
+    // DeviceList renders with empty-state message
+    expect(
+      screen.getByText('No tenés dispositivos suscriptos. Activá las notificaciones para empezar.'),
+    ).toBeInTheDocument();
+  });
+
+  it('Reintentar re-runs subscribe without re-mutate', async () => {
+    const mutateFn = vi.fn();
+    (useNotificationSettings as any).mockReturnValue({
+      data: [{ channel: 'in_app', enabled: true }],
+      isLoading: false,
+    });
+    (useUpdateNotificationSetting as any).mockReturnValue({
+      mutate: mutateFn,
+      isPending: false,
+    });
+    (usePushSubscriptions as any).mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+    });
+    (useRevokePushSubscription as any).mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    });
+    // First attempt fails
+    vi.mocked(requestPushSubscription).mockResolvedValueOnce({
+      ok: false,
+      reason: 'NotAllowedError',
+    });
+    // Second attempt succeeds
+    vi.mocked(requestPushSubscription).mockResolvedValueOnce({ ok: true });
+
+    render(<NotificationSettingsForm pacienteId="pac-1" />, { wrapper: createWrapper() });
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    const webPushCheckbox = checkboxes.find(
+      (cb) => (cb as HTMLInputElement).parentElement?.textContent?.includes('push'),
+    )!;
+    fireEvent.click(webPushCheckbox);
+
+    // First call: mutate called once
+    expect(mutateFn).toHaveBeenCalledTimes(1);
+    expect(mutateFn).toHaveBeenCalledWith({
+      pacienteId: 'pac-1',
+      channel: 'web_push',
+      enabled: true,
+    });
+
+    // Wait for failure banner
+    await screen.findByText(/Tu navegador bloqueó la suscripción/);
+
+    // Click Reintentar
+    const retryBtn = screen.getByRole('button', { name: 'Reintentar' });
+    fireEvent.click(retryBtn);
+
+    // mutate NOT called again
+    expect(mutateFn).toHaveBeenCalledTimes(1);
+
+    // Second attempt succeeds → subscribed
+    await screen.findByText('Push activo');
+    expect(screen.queryByText(/Tu navegador bloqueó la suscripción/)).not.toBeInTheDocument();
+  });
 });
