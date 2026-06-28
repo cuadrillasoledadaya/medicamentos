@@ -516,4 +516,132 @@ describe('NotificationSettingsForm', () => {
     await screen.findByText('Push activo');
     expect(screen.queryByText(/Tu navegador bloqueó la suscripción/)).not.toBeInTheDocument();
   });
+
+  // ---------------------------------------------------------------------------
+  // Alert behavior sub-toggles (configurable-push-alerts)
+  // ---------------------------------------------------------------------------
+
+  it('renders 4 sub-toggles with Spanish labels when web_push is ON', () => {
+    (useNotificationSettings as any).mockReturnValue({
+      data: [
+        { channel: 'in_app', enabled: true },
+        { channel: 'web_push', enabled: true, require_interaction: true, vibrate: true, renotify: true, badge: true },
+      ],
+      isLoading: false,
+    });
+    (useUpdateNotificationSetting as any).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    });
+    (usePushSubscriptions as any).mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+    });
+    (useRevokePushSubscription as any).mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    });
+
+    render(<NotificationSettingsForm pacienteId="pac-1" />, { wrapper: createWrapper() });
+
+    expect(screen.getByText('Mantener notificación en pantalla')).toBeInTheDocument();
+    expect(screen.getByText('Vibrar al recibir')).toBeInTheDocument();
+    expect(screen.getByText('Volver a alertar si ya hay una igual')).toBeInTheDocument();
+    expect(screen.getByText('Mostrar ícono en la barra')).toBeInTheDocument();
+  });
+
+  it('does NOT render sub-toggles when web_push is OFF', () => {
+    (useNotificationSettings as any).mockReturnValue({
+      data: [
+        { channel: 'in_app', enabled: true },
+        { channel: 'web_push', enabled: false },
+      ],
+      isLoading: false,
+    });
+    (useUpdateNotificationSetting as any).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    });
+    (usePushSubscriptions as any).mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+    });
+    (useRevokePushSubscription as any).mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    });
+
+    render(<NotificationSettingsForm pacienteId="pac-1" />, { wrapper: createWrapper() });
+
+    expect(screen.queryByText('Mantener notificación en pantalla')).not.toBeInTheDocument();
+    expect(screen.queryByText('Vibrar al recibir')).not.toBeInTheDocument();
+  });
+
+  it('toggling a sub-toggle calls mutate with field and value', async () => {
+    const mutateFn = vi.fn();
+    (useNotificationSettings as any).mockReturnValue({
+      data: [
+        { channel: 'in_app', enabled: true },
+        { channel: 'web_push', enabled: true, require_interaction: true, vibrate: true, renotify: true, badge: true },
+      ],
+      isLoading: false,
+    });
+    (useUpdateNotificationSetting as any).mockReturnValue({
+      mutate: mutateFn,
+      isPending: false,
+    });
+    (usePushSubscriptions as any).mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+    });
+    (useRevokePushSubscription as any).mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    });
+
+    render(<NotificationSettingsForm pacienteId="pac-1" />, { wrapper: createWrapper() });
+
+    // Find the vibrate checkbox by its label and toggle it OFF
+    const vibrateCheckbox = screen.getByRole('checkbox', { name: /Vibrar al recibir/i });
+    expect((vibrateCheckbox as HTMLInputElement).checked).toBe(true);
+
+    fireEvent.click(vibrateCheckbox);
+
+    expect(mutateFn).toHaveBeenCalledWith({
+      pacienteId: 'pac-1',
+      channel: 'web_push',
+      field: 'vibrate',
+      value: false,
+    });
+  });
+
+  it('shows iOS helper text when web_push is ON', () => {
+    (useNotificationSettings as any).mockReturnValue({
+      data: [
+        { channel: 'in_app', enabled: true },
+        { channel: 'web_push', enabled: true, require_interaction: true, vibrate: true, renotify: true, badge: true },
+      ],
+      isLoading: false,
+    });
+    (useUpdateNotificationSetting as any).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    });
+    (usePushSubscriptions as any).mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+    });
+    (useRevokePushSubscription as any).mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    });
+
+    render(<NotificationSettingsForm pacienteId="pac-1" />, { wrapper: createWrapper() });
+
+    expect(screen.getByText('En iPhone algunas opciones pueden no funcionar (vibrar, ícono en barra).')).toBeInTheDocument();
+  });
 });

@@ -30,11 +30,21 @@ export function useUpdateNotificationSetting() {
       pacienteId,
       channel,
       enabled,
+      field,
+      value,
     }: {
       pacienteId: string;
       channel: 'in_app' | 'email' | 'sms' | 'web_push';
-      enabled: boolean;
-    }) => updateNotificationSetting(pacienteId, channel, enabled),
+      enabled?: boolean;
+      field?: 'require_interaction' | 'vibrate' | 'renotify' | 'badge';
+      value?: boolean;
+    }) => {
+      const payload: Parameters<typeof updateNotificationSetting>[2] =
+        field !== undefined && value !== undefined
+          ? { field, value }
+          : enabled!;
+      return updateNotificationSetting(pacienteId, channel, payload);
+    },
     onSuccess: (_, { pacienteId }) => {
       queryClient.invalidateQueries({ queryKey: ['notification-settings', pacienteId] });
     },
