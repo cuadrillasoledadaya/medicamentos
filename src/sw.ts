@@ -2,15 +2,11 @@
 // Uses injectManifest mode — Workbox precaching is injected at build time.
 // This file is excluded from tsconfig.json and processed by vite-plugin-pwa.
 
-// Workbox globals are available via the vite-plugin-pwa injectManifest build
-// @ts-ignore
-const { precacheAndRoute } = workbox.precaching;
-// @ts-ignore
-const { registerRoute } = workbox.routing;
-// @ts-ignore
-const { NetworkFirst, StaleWhileRevalidate } = workbox.strategies;
-// @ts-ignore
-const { ExpirationPlugin } = workbox.expiration;
+// Workbox modules are bundled at build time by vite-plugin-pwa + workbox-build.
+import { precacheAndRoute } from 'workbox-precaching';
+import { registerRoute } from 'workbox-routing';
+import { NetworkFirst, StaleWhileRevalidate } from 'workbox-strategies';
+import { ExpirationPlugin } from 'workbox-expiration';
 
 // Precache the app shell (self.__WB_MANIFEST is replaced by vite-plugin-pwa at build time)
 // @ts-ignore
