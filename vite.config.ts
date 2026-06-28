@@ -51,23 +51,6 @@ export default defineConfig({
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
       },
-      workbox: {
-        runtimeCaching: [
-          {
-            urlPattern:
-              /^https:\/\/cmoydmfdhssxdmwqlueg\.supabase\.co\/rest\/v1\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-api',
-              networkTimeoutSeconds: 5,
-              expiration: {
-                maxEntries: 200,
-                maxAgeSeconds: 60 * 60 * 24,
-              },
-            },
-          },
-        ],
-      },
     }),
   ],
 });
