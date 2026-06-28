@@ -366,6 +366,10 @@ export type Database = {
           medication_id: string | null;
           channel: Database['public']['Enums']['notification_channel'];
           enabled: boolean;
+          require_interaction: boolean;
+          vibrate: boolean;
+          renotify: boolean;
+          badge: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -375,6 +379,10 @@ export type Database = {
           medication_id?: string | null;
           channel: Database['public']['Enums']['notification_channel'];
           enabled?: boolean;
+          require_interaction?: boolean;
+          vibrate?: boolean;
+          renotify?: boolean;
+          badge?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -384,6 +392,10 @@ export type Database = {
           medication_id?: string | null;
           channel?: Database['public']['Enums']['notification_channel'];
           enabled?: boolean;
+          require_interaction?: boolean;
+          vibrate?: boolean;
+          renotify?: boolean;
+          badge?: boolean;
           created_at?: string;
           updated_at?: string;
         };
