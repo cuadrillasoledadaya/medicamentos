@@ -118,3 +118,53 @@ describe('updateNotificationSetting channel union', () => {
     expect(result.data?.channel).toBe('web_push');
   });
 });
+
+describe('updateNotificationSetting field/value contract', () => {
+  it('updates a single field via { field, value } without touching others', async () => {
+    const upsertFn = vi.fn().mockReturnThis();
+    const selectFn = vi.fn().mockReturnThis();
+    (mockSupabase.from as any).mockReturnValue({
+      upsert: upsertFn,
+      select: selectFn,
+      single: vi.fn().mockResolvedValue({
+        data: { paciente_id: 'pac-1', channel: 'web_push', vibrate: false },
+        error: null,
+      }),
+    });
+
+    const result = await updateNotificationSetting('pac-1', 'web_push', { field: 'vibrate', value: false });
+    expect(result.error).toBeNull();
+
+    // Verify upsert was called with the field name as key
+    expect(upsertFn).toHaveBeenCalledWith(
+      expect.objectContaining({ paciente_id: 'pac-1', channel: 'web_push', vibrate: false }),
+      expect.anything(),
+    );
+  });
+
+  it('preserves backwards-compatible 3-arg boolean call', async () => {
+    const upsertFn = vi.fn().mockReturnThis();
+    (mockSupabase.from as any).mockReturnValue({
+      upsert: upsertFn,
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: { paciente_id: 'pac-1', channel: 'web_push', enabled: false },
+        error: null,
+      }),
+    });
+
+    const result = await updateNotificationSetting('pac-1', 'web_push', false);
+    expect(result.error).toBeNull();
+
+    expect(upsertFn).toHaveBeenCalledWith(
+      expect.objectContaining({ paciente_id: 'pac-1', channel: 'web_push', enabled: false }),
+      expect.anything(),
+    );
+  });
+
+  it('throws Error for unknown field values', async () => {
+    await expect(
+      updateNotificationSetting('pac-1', 'web_push', { field: 'unknown_field', value: true }),
+    ).rejects.toThrow('Invalid notification setting field: unknown_field');
+  });
+});

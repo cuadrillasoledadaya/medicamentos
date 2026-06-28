@@ -131,6 +131,15 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
   const webPushEnabled = isEnabled('web_push') || pushSubscriptionState === 'subscribed';
   const isPending = pushSubscriptionState === 'pending';
 
+  // Alert behavior preferences from the web_push settings row
+  const webPushSetting = settings?.find((s) => s.channel === 'web_push');
+  const alertPrefs = {
+    require_interaction: webPushSetting?.require_interaction ?? true,
+    vibrate: webPushSetting?.vibrate ?? true,
+    renotify: webPushSetting?.renotify ?? true,
+    badge: webPushSetting?.badge ?? true,
+  };
+
   return (
     <div style={{ padding: '1rem' }}>
       <h3 style={{ margin: '0 0 0.5rem' }}>Notificaciones</h3>
@@ -246,6 +255,34 @@ export function NotificationSettingsForm({ pacienteId }: Props) {
           );
         })}
       </div>
+
+      {/* Alert behavior sub-toggles — visible only when web_push is enabled */}
+      {webPushEnabled && (
+        <div style={{ marginLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem' }}>
+          <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.5rem' }}>
+            Comportamiento de las notificaciones:
+          </div>
+          {[
+            { field: 'require_interaction' as const, label: 'Mantener notificación en pantalla' },
+            { field: 'vibrate' as const, label: 'Vibrar al recibir' },
+            { field: 'renotify' as const, label: 'Volver a alertar si ya hay una igual' },
+            { field: 'badge' as const, label: 'Mostrar ícono en la barra' },
+          ].map(({ field, label }) => (
+            <label key={field} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+              <input
+                type="checkbox"
+                checked={alertPrefs[field]}
+                onChange={() => updateMutation.mutate({ pacienteId, channel: 'web_push', field, value: !alertPrefs[field] })}
+                disabled={updateMutation.isPending}
+              />
+              <span>{label}</span>
+            </label>
+          ))}
+          <p style={{ fontSize: '0.75rem', color: '#888', margin: '0.25rem 0 0' }}>
+            En iPhone algunas opciones pueden no funcionar (vibrar, ícono en barra).
+          </p>
+        </div>
+      )}
 
       {/* Device list — shown when web_push is enabled */}
       {webPushEnabled && <DeviceList />}

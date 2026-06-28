@@ -5,6 +5,28 @@ import type { NotificationSetting } from '../../lib/database.types';
 
 const client = supabase as any;
 
+const ALLOWED_FIELDS = ['enabled', 'require_interaction', 'vibrate', 'renotify', 'badge'] as const;
+type AllowedField = typeof ALLOWED_FIELDS[number];
+type UpdatePayload = boolean | { field: AllowedField; value: boolean };
+
+function buildUpsertBody(
+  pacienteId: string,
+  channel: 'in_app' | 'email' | 'sms' | 'web_push',
+  payload: UpdatePayload,
+): Record<string, unknown> {
+  const base = { paciente_id: pacienteId, medication_id: null, channel };
+
+  if (typeof payload === 'boolean') {
+    return { ...base, enabled: payload };
+  }
+
+  if (!ALLOWED_FIELDS.includes(payload.field)) {
+    throw new Error(`Invalid notification setting field: ${payload.field}`);
+  }
+
+  return { ...base, [payload.field]: payload.value };
+}
+
 export async function getNotificationSettings(
   pacienteId: string,
 ): Promise<{ data: NotificationSetting[] | null; error: Error | null }> {
@@ -20,16 +42,12 @@ export async function getNotificationSettings(
 export async function updateNotificationSetting(
   pacienteId: string,
   channel: 'in_app' | 'email' | 'sms' | 'web_push',
-  enabled: boolean,
+  payload: UpdatePayload,
 ): Promise<{ data: NotificationSetting | null; error: Error | null }> {
+  const body = buildUpsertBody(pacienteId, channel, payload);
   const { data, error } = await client
     .from('notification_settings')
-    .upsert({
-      paciente_id: pacienteId,
-      medication_id: null,
-      channel,
-      enabled,
-    }, { onConflict: 'paciente_id,medication_id,channel' })
+    .upsert(body, { onConflict: 'paciente_id,medication_id,channel' })
     .select()
     .single();
 

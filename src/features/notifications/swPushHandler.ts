@@ -111,7 +111,7 @@ export function decidePushAction(
 export function buildNotificationOptions(
   payload: SwPushPayload,
 ): NotificationOptions {
-  const opts: NotificationOptions = {
+  const opts: Record<string, unknown> = {
     body: `${payload.medication_name} — ${payload.dose} (${payload.scheduled_at})`,
     tag: payload.notification_id,
     icon: '/pwa-192x192.png',
@@ -130,5 +130,5 @@ export function buildNotificationOptions(
   if (payload.vibrate)  opts.vibrate  = [200, 100, 200, 100, 200];
   if (payload.renotify) opts.renotify = true;
   if (payload.badge)    opts.badge    = '/pwa-192x192.png';
-  return opts;
+  return opts as NotificationOptions;
 }
