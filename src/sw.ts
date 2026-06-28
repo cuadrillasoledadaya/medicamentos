@@ -218,11 +218,11 @@ self.addEventListener('push', (event) => {
     notifications.forEach((n) => n.close());
   });
 
-  self.registration.showNotification(title, {
+  const notifOpts = {
     body,
     tag: notificationId,
     icon: '/pwa-192x192.png',
-    requireInteraction: false,
+    requireInteraction: typeof data.requireInteraction === 'boolean' ? data.requireInteraction : false,
     actions: [
       { action: 'taken', title: 'Marcar como tomada', icon: '/pwa-192x192.png' },
       { action: 'snooze', title: 'Posponer 10 min', icon: '/pwa-192x192.png' },
@@ -233,7 +233,13 @@ self.addEventListener('push', (event) => {
       action_url: data.action_url || '/today',
       paciente_id: data.paciente_id,
     },
-  });
+  };
+
+  if (data.vibrate === true) notifOpts.vibrate = [200, 100, 200, 100, 200];
+  if (data.renotify === true) notifOpts.renotify = true;
+  if (data.badge === true) notifOpts.badge = '/pwa-192x192.png';
+
+  self.registration.showNotification(title, notifOpts);
 });
 
 // --- SW Lifecycle ---
@@ -283,11 +289,12 @@ if (__isDev) {
       self.registration.getNotifications({ tag: notificationId }).then((notifications) => {
         notifications.forEach((n) => n.close());
       });
-      self.registration.showNotification(title, {
+
+      const notifOpts = {
         body,
         tag: notificationId,
         icon: '/pwa-192x192.png',
-        requireInteraction: false,
+        requireInteraction: typeof payload.requireInteraction === 'boolean' ? payload.requireInteraction : false,
         actions: [
           { action: 'taken', title: 'Marcar como tomada', icon: '/pwa-192x192.png' },
           { action: 'snooze', title: 'Posponer 10 min', icon: '/pwa-192x192.png' },
@@ -298,7 +305,13 @@ if (__isDev) {
           action_url: payload.action_url || '/today',
           paciente_id: payload.paciente_id,
         },
-      });
+      };
+
+      if (payload.vibrate === true) notifOpts.vibrate = [200, 100, 200, 100, 200];
+      if (payload.renotify === true) notifOpts.renotify = true;
+      if (payload.badge === true) notifOpts.badge = '/pwa-192x192.png';
+
+      self.registration.showNotification(title, notifOpts);
     }
 
     if (type === 'TEST_SIMULATE_NOTIFICATION_CLICK') {

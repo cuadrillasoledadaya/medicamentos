@@ -31,6 +31,10 @@ describe('parsePushEvent', () => {
       unit: 'mg',
       scheduled_at: '2026-06-26T08:00:00Z',
       action_url: '/today',
+      requireInteraction: true,
+      vibrate: true,
+      renotify: true,
+      badge: true,
     };
 
     const result = parsePushEvent(JSON.stringify(data));
@@ -169,5 +173,153 @@ describe('buildNotificationOptions', () => {
 
     const options = buildNotificationOptions(payload);
     expect(options.body).toContain('No especificada');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Alert behavior flags — asymmetry per design
+  // ---------------------------------------------------------------------------
+
+  it('passes requireInteraction as-is when TRUE', () => {
+    const payload = {
+      notification_id: 'abc',
+      medication_name: 'Test',
+      dose: '1 mg',
+      unit: 'mg',
+      scheduled_at: '2026-06-26T08:00:00Z',
+      action_url: '/today',
+      requireInteraction: true,
+      vibrate: true,
+      renotify: true,
+      badge: true,
+    };
+
+    const options = buildNotificationOptions(payload);
+    expect(options.requireInteraction).toBe(true);
+  });
+
+  it('passes requireInteraction as-is when FALSE', () => {
+    const payload = {
+      notification_id: 'abc',
+      medication_name: 'Test',
+      dose: '1 mg',
+      unit: 'mg',
+      scheduled_at: '2026-06-26T08:00:00Z',
+      action_url: '/today',
+      requireInteraction: false,
+      vibrate: false,
+      renotify: false,
+      badge: false,
+    };
+
+    const options = buildNotificationOptions(payload);
+    expect(options.requireInteraction).toBe(false);
+  });
+
+  it('includes vibrate pattern when TRUE', () => {
+    const payload = {
+      notification_id: 'abc',
+      medication_name: 'Test',
+      dose: '1 mg',
+      unit: 'mg',
+      scheduled_at: '2026-06-26T08:00:00Z',
+      action_url: '/today',
+      requireInteraction: true,
+      vibrate: true,
+      renotify: true,
+      badge: true,
+    };
+
+    const options = buildNotificationOptions(payload);
+    expect(options.vibrate).toEqual([200, 100, 200, 100, 200]);
+  });
+
+  it('omits vibrate key when FALSE', () => {
+    const payload = {
+      notification_id: 'abc',
+      medication_name: 'Test',
+      dose: '1 mg',
+      unit: 'mg',
+      scheduled_at: '2026-06-26T08:00:00Z',
+      action_url: '/today',
+      requireInteraction: true,
+      vibrate: false,
+      renotify: true,
+      badge: true,
+    };
+
+    const options = buildNotificationOptions(payload);
+    expect(options).not.toHaveProperty('vibrate');
+  });
+
+  it('includes renotify when TRUE', () => {
+    const payload = {
+      notification_id: 'abc',
+      medication_name: 'Test',
+      dose: '1 mg',
+      unit: 'mg',
+      scheduled_at: '2026-06-26T08:00:00Z',
+      action_url: '/today',
+      requireInteraction: true,
+      vibrate: true,
+      renotify: true,
+      badge: true,
+    };
+
+    const options = buildNotificationOptions(payload);
+    expect(options.renotify).toBe(true);
+  });
+
+  it('omits renotify key when FALSE', () => {
+    const payload = {
+      notification_id: 'abc',
+      medication_name: 'Test',
+      dose: '1 mg',
+      unit: 'mg',
+      scheduled_at: '2026-06-26T08:00:00Z',
+      action_url: '/today',
+      requireInteraction: true,
+      vibrate: true,
+      renotify: false,
+      badge: true,
+    };
+
+    const options = buildNotificationOptions(payload);
+    expect(options).not.toHaveProperty('renotify');
+  });
+
+  it('includes badge URL when TRUE', () => {
+    const payload = {
+      notification_id: 'abc',
+      medication_name: 'Test',
+      dose: '1 mg',
+      unit: 'mg',
+      scheduled_at: '2026-06-26T08:00:00Z',
+      action_url: '/today',
+      requireInteraction: true,
+      vibrate: true,
+      renotify: true,
+      badge: true,
+    };
+
+    const options = buildNotificationOptions(payload);
+    expect(options.badge).toBe('/pwa-192x192.png');
+  });
+
+  it('omits badge key when FALSE', () => {
+    const payload = {
+      notification_id: 'abc',
+      medication_name: 'Test',
+      dose: '1 mg',
+      unit: 'mg',
+      scheduled_at: '2026-06-26T08:00:00Z',
+      action_url: '/today',
+      requireInteraction: true,
+      vibrate: true,
+      renotify: true,
+      badge: false,
+    };
+
+    const options = buildNotificationOptions(payload);
+    expect(options).not.toHaveProperty('badge');
   });
 });
