@@ -288,3 +288,56 @@ describe('Migration 0015 — push_dispatch_cron', () => {
     expect(sql).toMatch(/security\s+definer/i);
   });
 });
+
+describe('Migration 0022 — push alert behavior columns', () => {
+  it('file exists and contains 4 ADD COLUMN IF NOT EXISTS statements', () => {
+    const sql = readMigration('0022_push_alert_behaviors.sql');
+    const addColumnMatches = sql.match(/alter\s+table\s+notification_settings\s+add\s+column\s+if\s+not\s+exists/gi);
+    expect(addColumnMatches).not.toBeNull();
+    expect(addColumnMatches!.length).toBe(4);
+  });
+
+  it('adds require_interaction as BOOLEAN NOT NULL DEFAULT TRUE', () => {
+    const sql = readMigration('0022_push_alert_behaviors.sql');
+    expect(sql).toMatch(/require_interaction\s+boolean\s+not\s+null\s+default\s+true/i);
+  });
+
+  it('adds vibrate as BOOLEAN NOT NULL DEFAULT TRUE', () => {
+    const sql = readMigration('0022_push_alert_behaviors.sql');
+    expect(sql).toMatch(/\bvibrate\s+boolean\s+not\s+null\s+default\s+true/i);
+  });
+
+  it('adds renotify as BOOLEAN NOT NULL DEFAULT TRUE', () => {
+    const sql = readMigration('0022_push_alert_behaviors.sql');
+    expect(sql).toMatch(/\brenotify\s+boolean\s+not\s+null\s+default\s+true/i);
+  });
+
+  it('adds badge as BOOLEAN NOT NULL DEFAULT TRUE', () => {
+    const sql = readMigration('0022_push_alert_behaviors.sql');
+    expect(sql).toMatch(/\bbadge\s+boolean\s+not\s+null\s+default\s+true/i);
+  });
+
+  it('columns appear in spec order: require_interaction, vibrate, renotify, badge', () => {
+    const sql = readMigration('0022_push_alert_behaviors.sql');
+    const positions = [
+      sql.search(/require_interaction/i),
+      sql.search(/\bvibrate\b/i),
+      sql.search(/\brenotify\b/i),
+      sql.search(/\bbadge\b/i),
+    ];
+    for (let i = 1; i < positions.length; i++) {
+      expect(positions[i]).toBeGreaterThan(positions[i - 1]);
+    }
+  });
+
+  it('does NOT add new RLS policies', () => {
+    const sql = readMigration('0022_push_alert_behaviors.sql');
+    expect(sql).not.toMatch(/create\s+policy/i);
+    expect(sql).not.toMatch(/enable\s+row\s+level\s+security/i);
+  });
+
+  it('does NOT add new indexes', () => {
+    const sql = readMigration('0022_push_alert_behaviors.sql');
+    expect(sql).not.toMatch(/create\s+(unique\s+)?index/i);
+  });
+});
