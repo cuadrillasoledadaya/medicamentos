@@ -119,6 +119,7 @@ export async function subscribeToPush(
   } as any);
 
   if (error) {
+    console.warn('[push-subscription] Supabase insert failed:', error);
     // Subscription was created but storage failed — unsubscribe to avoid orphan
     await subscription.unsubscribe();
     throw new Error(`Failed to save push subscription: ${error.message}`);
