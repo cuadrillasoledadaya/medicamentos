@@ -1,4 +1,4 @@
-<!-- Synced from openspec/changes/web-push-notifications/ on 2026-06-26. Synced from openspec/changes/web-push-ux-fixes/ on 2026-06-27. Source-of-truth delta. -->
+<!-- Synced from openspec/changes/web-push-notifications/ on 2026-06-26. Synced from openspec/changes/web-push-ux-fixes/ on 2026-06-27. Synced from openspec/changes/fix-web-push-subscribe/ on 2026-06-28. Source-of-truth delta. -->
 # Reminder / Notification Domain Specification
 
 ## Purpose
@@ -31,13 +31,14 @@ A `push_subscriptions` table SHALL store Web Push subscription objects per user 
 - THEN the system SHALL create an active `push_subscriptions` row for the current user and device
 - AND the browser permission prompt SHALL fire
 
-#### Scenario: Web push channel requires browser permission
+#### Scenario: Web push channel requires browser permission [modified]
 
 - GIVEN a caregiver has not yet granted notification permission in the browser
 - WHEN they toggle `web_push` to ON
-- THEN the browser's native permission prompt SHALL appear
-- IF the user denies permission: no push_subscriptions row is created and the toggle reverts to OFF
-- IF the user grants permission: a push_subscriptions row is created and the toggle stays ON
+- THEN the system SHALL call `updateMutation.mutate({channel:'web_push', enabled:true})` BEFORE invoking the push handshake
+- AND the browser's native permission prompt SHALL appear
+- IF the user grants permission: a `push_subscriptions` row SHALL be created and the `web_push` channel SHALL be active
+- IF the user denies permission OR the browser blocks `pushManager.subscribe` (e.g. incognito `NotAllowedError`): the `notification_settings` row SHALL remain with `enabled = true`; no `push_subscriptions` row SHALL be created; a Spanish warning banner SHALL be shown with a "Reintentar" action; the toggle SHALL remain visually checked
 
 ### Requirement: Notification Trigger
 
