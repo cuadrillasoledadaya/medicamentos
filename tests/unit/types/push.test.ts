@@ -110,6 +110,10 @@ describe('PushPayload schema', () => {
       unit: 'mg',
       scheduled_at: '2026-06-26T08:00:00Z',
       action_url: '/today',
+      requireInteraction: true,
+      vibrate: true,
+      renotify: true,
+      badge: true,
     };
     const result = pushPayloadSchema.parse(input);
     expect(result.notification_id).toBe(input.notification_id);
