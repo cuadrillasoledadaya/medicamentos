@@ -218,11 +218,13 @@ self.addEventListener('push', (event) => {
     notifications.forEach((n) => n.close());
   });
 
-  const notifOpts = {
+  const notifOpts: Record<string, unknown> = {
     body,
     tag: notificationId,
     icon: '/pwa-192x192.png',
-    requireInteraction: typeof data.requireInteraction === 'boolean' ? data.requireInteraction : false,
+    // Default requireInteraction to TRUE so old Edge Function payloads
+    // (which don't carry the alert flags) still produce a sticky alert.
+    requireInteraction: typeof data.requireInteraction === 'boolean' ? data.requireInteraction : true,
     actions: [
       { action: 'taken', title: 'Marcar como tomada', icon: '/pwa-192x192.png' },
       { action: 'snooze', title: 'Posponer 10 min', icon: '/pwa-192x192.png' },
@@ -235,11 +237,15 @@ self.addEventListener('push', (event) => {
     },
   };
 
-  if (data.vibrate === true) notifOpts.vibrate = [200, 100, 200, 100, 200];
-  if (data.renotify === true) notifOpts.renotify = true;
-  if (data.badge === true) notifOpts.badge = '/pwa-192x192.png';
+  // Default vibrate, renotify, badge to TRUE when missing — keeps the
+  // alerting behavior for old Edge Function payloads. The new Edge
+  // Function sends these explicitly (and the user's toggle in the UI
+  // can still set them to false).
+  if (data.vibrate !== false) notifOpts.vibrate = [200, 100, 200, 100, 200];
+  if (data.renotify !== false) notifOpts.renotify = true;
+  if (data.badge !== false) notifOpts.badge = '/pwa-192x192.png';
 
-  self.registration.showNotification(title, notifOpts);
+  self.registration.showNotification(title, notifOpts as NotificationOptions);
 });
 
 // --- SW Lifecycle ---
