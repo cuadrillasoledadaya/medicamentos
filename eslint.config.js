@@ -35,6 +35,8 @@ export default [
             'tests/unit/notifications/*.test.tsx',
             'tests/unit/lib/*.test.ts',
             'tests/unit/features/*.test.ts',
+            'tests/unit/hooks/*.test.ts',
+            'tests/unit/hooks/*.test.tsx',
             'tests/unit/pages/*.test.tsx',
             'src/sw.ts',
           ],
