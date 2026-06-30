@@ -23,6 +23,21 @@ vi.mock('@/stores/activePaciente', () => ({
   useActivePaciente: () => ({ activePacienteId: 'test-paciente-uuid' }),
 }));
 
+// Mock the auto-trigger hook (added in PR3) so the test doesn't need QueryClientProvider
+vi.mock('@/hooks/useNotificationDeepLinkAction', () => ({
+  useNotificationDeepLinkAction: () => ({ status: 'idle' }),
+}));
+
+// Mock the iOS modal (added in PR3) so the test doesn't depend on the isIOS check
+vi.mock('@/features/notifications/IntakeActionModal', () => ({
+  IntakeActionModal: () => null,
+}));
+
+// Mock isIOS to return false (added in PR3 dependency)
+vi.mock('@/features/notifications/scheduler', () => ({
+  isIOS: () => false,
+}));
+
 describe('TodayPage', () => {
   it('renders TodayList at /today', () => {
     render(
