@@ -66,6 +66,55 @@ export interface ActionMessage {
   reason?: string;
 }
 
+/** Decision returned by decideNotificationClick for the SW notificationclick handler. */
+export interface NotificationClickDecision {
+  /** URL to open via clients.openWindow; null if no window should be opened. */
+  openUrl: string | null;
+  /** PostMessage to dispatch to matched clients; null if no message needed. */
+  postMessage: ActionMessage | null;
+}
+
+/**
+ * Decide what URL to open and what message to send when user clicks a notification.
+ * Replaces the inline switch in sw.ts:150-186 for testability.
+ */
+export function decideNotificationClick(
+  action: string,
+  tag: string,
+): NotificationClickDecision {
+  const tomaId = tag.replace('toma-', '');
+  if (!tomaId) {
+    return { openUrl: null, postMessage: null };
+  }
+
+  // Body tap (no action) → open URL only, no postMessage
+  if (!action) {
+    return { openUrl: `/today?tomaId=${tomaId}`, postMessage: null };
+  }
+
+  const baseMessage: Omit<ActionMessage, 'type'> = { tomaId };
+
+  switch (action) {
+    case 'taken':
+      return {
+        openUrl: `/today?tomaId=${tomaId}&action=taken`,
+        postMessage: { type: 'TAKEN', ...baseMessage, takenAt: new Date().toISOString() },
+      };
+    case 'snooze':
+      return {
+        openUrl: `/today?tomaId=${tomaId}&action=snooze`,
+        postMessage: { type: 'SNOOZE', ...baseMessage, snoozeMinutes: 10 },
+      };
+    case 'skip':
+      return {
+        openUrl: `/today?tomaId=${tomaId}&action=skip`,
+        postMessage: { type: 'SKIP', ...baseMessage, reason: 'notification-skip' },
+      };
+    default:
+      return { openUrl: null, postMessage: null };
+  }
+}
+
 /**
  * Decide what message to send to the main thread based on the action button.
  * Returns null for unknown actions or empty tomaId (body tap — handled separately).

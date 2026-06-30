@@ -35,6 +35,7 @@ export default [
             'tests/unit/notifications/*.test.tsx',
             'tests/unit/lib/*.test.ts',
             'tests/unit/features/*.test.ts',
+            'tests/unit/pages/*.test.tsx',
             'src/sw.ts',
           ],
           maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 30,
