@@ -7,6 +7,7 @@ import { precacheAndRoute } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
 import { NetworkFirst, StaleWhileRevalidate } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
+import { decideNotificationClick } from './features/notifications/swPushHandler';
 
 // Precache the app shell (self.__WB_MANIFEST is replaced by vite-plugin-pwa at build time)
 // @ts-ignore
@@ -150,39 +151,22 @@ self.addEventListener('message', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const tomaId = event.notification.tag?.replace('toma-', '');
+  const tag = event.notification.tag;
   const action = event.action;
 
-  // Body tap (no action button) -> navigate to /today
-  if (!action) {
-    event.waitUntil(self.clients.openWindow('/today'));
-    return;
+  // Thin wrapper: delegate to pure decision function (tested in isolation)
+  const d = decideNotificationClick(action, tag);
+
+  if (d.openUrl) {
+    event.waitUntil(self.clients.openWindow(d.openUrl));
   }
 
-  if (!tomaId) return; // orphan notification (no tag), safe no-op
-
-  const message = { tomaId };
-
-  switch (action) {
-    case 'taken':
-      message.type = 'TAKEN';
-      message.takenAt = new Date().toISOString();
-      event.waitUntil(self.clients.openWindow('/today'));
-      break;
-    case 'snooze':
-      message.type = 'SNOOZE';
-      message.snoozeMinutes = 10;
-      break;
-    case 'skip':
-      message.type = 'SKIP';
-      message.reason = 'notification-skip';
-      event.waitUntil(self.clients.openWindow('/today'));
-      break;
+  // PostMessage AFTER openWindow (clients may now be available)
+  if (d.postMessage) {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      clients.forEach((client) => client.postMessage(d.postMessage));
+    });
   }
-
-  self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-    clients.forEach((client) => client.postMessage(message));
-  });
 });
 
 // --- Push Event Handler ---

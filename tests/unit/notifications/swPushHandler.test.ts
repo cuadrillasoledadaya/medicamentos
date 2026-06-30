@@ -3,6 +3,7 @@ import {
   parsePushEvent,
   decidePushAction,
   buildNotificationOptions,
+  decideNotificationClick,
 } from '@/features/notifications/swPushHandler';
 
 /**
@@ -321,5 +322,56 @@ describe('buildNotificationOptions', () => {
 
     const options = buildNotificationOptions(payload);
     expect(options).not.toHaveProperty('badge');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// decideNotificationClick — new function for SW openWindow URL + postMessage
+// ---------------------------------------------------------------------------
+
+describe('decideNotificationClick', () => {
+  it('returns openUrl + TAKEN postMessage for "taken" action', () => {
+    const result = decideNotificationClick('taken', 'toma-abc123');
+    expect(result.openUrl).toBe('/today?tomaId=abc123&action=taken');
+    expect(result.postMessage).not.toBeNull();
+    expect(result.postMessage!.type).toBe('TAKEN');
+    expect(result.postMessage!.tomaId).toBe('abc123');
+    expect(result.postMessage!.takenAt).toBeDefined();
+  });
+
+  it('returns openUrl + SNOOZE postMessage for "snooze" action', () => {
+    const result = decideNotificationClick('snooze', 'toma-xyz789');
+    expect(result.openUrl).toBe('/today?tomaId=xyz789&action=snooze');
+    expect(result.postMessage).not.toBeNull();
+    expect(result.postMessage!.type).toBe('SNOOZE');
+    expect(result.postMessage!.tomaId).toBe('xyz789');
+    expect(result.postMessage!.snoozeMinutes).toBe(10);
+  });
+
+  it('returns openUrl + SKIP postMessage for "skip" action', () => {
+    const result = decideNotificationClick('skip', 'toma-456def');
+    expect(result.openUrl).toBe('/today?tomaId=456def&action=skip');
+    expect(result.postMessage).not.toBeNull();
+    expect(result.postMessage!.type).toBe('SKIP');
+    expect(result.postMessage!.tomaId).toBe('456def');
+    expect(result.postMessage!.reason).toBe('notification-skip');
+  });
+
+  it('returns openUrl only (no postMessage) for body tap (empty action)', () => {
+    const result = decideNotificationClick('', 'toma-body-tap');
+    expect(result.openUrl).toBe('/today?tomaId=body-tap');
+    expect(result.postMessage).toBeNull();
+  });
+
+  it('returns null for both fields for orphan (empty tag)', () => {
+    const result = decideNotificationClick('taken', '');
+    expect(result.openUrl).toBeNull();
+    expect(result.postMessage).toBeNull();
+  });
+
+  it('returns null for both fields for unknown action with valid tag', () => {
+    const result = decideNotificationClick('unknown', 'toma-orphan');
+    expect(result.openUrl).toBeNull();
+    expect(result.postMessage).toBeNull();
   });
 });
