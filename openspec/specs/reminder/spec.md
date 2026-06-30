@@ -286,4 +286,66 @@ The system SHALL log every Web Push delivery attempt to a `notification_deliveri
 - WHEN the Web Push service responds
 - THEN the system SHALL insert a row into `notification_deliveries` with `status = 'failure'` and `error_message` containing the response code or body
 
+### Requirement: SW Snooze OpenWindow (ADDED — snooze-push-alerts)
+
+The SW snooze action SHALL open a window BEFORE postMessage. The SW `notificationclick` handler SHALL call `clients.openWindow(...)` for `snooze` BEFORE invoking `client.postMessage(...)`. Opened URL SHALL be `/today?tomaId=<uuid>&action=snooze`. Ensures the SNOOZE message reaches a live client even when the app was fully closed at tap time.
+
+#### Scenario: Snooze from notification opens URL first when app is closed
+
+- GIVEN the app is NOT open
+- AND a push with "Posponer 10 min" action is displayed
+- WHEN the user taps "Posponer 10 min"
+- THEN the SW SHALL open `/today?tomaId=<uuid>&action=snooze` first
+- AND THEN post SNOOZE message to the now-open client
+- AND the `snooze_toma` RPC SHALL be invoked
+- AND the toma SHALL be persisted with `snoozed_until = now() + 10 minutes`
+
+#### Scenario: Snooze from notification opens or focuses window when app is already open
+
+- GIVEN the app is already open
+- AND a push with "Posponer 10 min" action is displayed
+- WHEN the user taps "Posponer 10 min"
+- THEN the SW SHALL focus the existing window OR open a new one at `/today?tomaId=<uuid>&action=snooze`
+- AND the SNOOZE message SHALL reach the open client
+- AND the snooze RPC SHALL be invoked
+
+### Requirement: Alert-Behavior Flag Defaults (ADDED — snooze-push-alerts)
+
+The 4 alert-behavior flags SHALL be read from the push payload with a default of TRUE. The SW SHALL read `vibrate`, `requireInteraction`, `renotify`, `badge` from the payload. WHEN a flag is absent (e.g., older EF deployment), the SW SHALL default the flag to TRUE so the notification remains sticky and alertante out of the box.
+
+#### Scenario: All flags default to TRUE when payload omits them
+
+- GIVEN a push payload without any of the 4 alert-behavior flags
+- WHEN the SW calls `showNotification`
+- THEN `requireInteraction: true`, `vibrate: [200, 100, 200, 100, 200]`, `renotify: true`, `badge: '/pwa-192x192.png'` SHALL all be applied
+- AND the notification SHALL be sticky and re-alerting
+
+#### Scenario: Individual flag can be overridden
+
+- GIVEN a push payload with `vibrate: false`
+- WHEN the SW calls `showNotification`
+- THEN the `vibrate` key SHALL be omitted
+- AND the other three flags (`requireInteraction`, `renotify`, `badge`) SHALL still default to TRUE if absent
+
+### Requirement: iOS Intake Modal (ADDED — snooze-push-alerts)
+
+An in-app intake modal SHALL render for iOS users on the deep-link route. When user navigates to `/today?tomaId=<uuid>&action=<taken|snooze|skip>` AND platform is iOS Safari (where `Notification.actions` is unsupported), the app SHALL render an on-screen modal with the three action buttons for that toma. On non-iOS, the auto-trigger from `intake-deep-link` is sufficient; the modal is NOT required.
+
+#### Scenario: iOS user sees intake modal on deep-link route
+
+- GIVEN iOS Safari standalone
+- AND a push WITHOUT action buttons (iOS limitation) is displayed
+- WHEN the user taps the notification body
+- THEN the SW opens app to `/today?tomaId=<uuid>`
+- AND the app SHALL display an in-app modal with the three action buttons (taken/snooze/skip)
+- AND the user can tap a button to dispatch the action without leaving the Today view
+
+#### Scenario: Non-iOS user does NOT see intake modal
+
+- GIVEN Android Chrome
+- AND the SW opens app to `/today?tomaId=<uuid>&action=taken`
+- WHEN the TodayPage mounts
+- THEN the app SHALL auto-trigger `taken` on mount
+- AND no extra modal SHALL be rendered
+
 
