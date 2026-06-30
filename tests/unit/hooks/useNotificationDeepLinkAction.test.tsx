@@ -106,13 +106,67 @@ describe('useNotificationDeepLinkAction', () => {
       </MemoryRouter>
     );
 
-    renderHook(() => useNotificationDeepLinkAction(), { wrapper });
+    const { result } = renderHook(() => useNotificationDeepLinkAction(), { wrapper });
 
     await new Promise((r) => setTimeout(r, 100));
 
+    expect(result.current.status).toBe('idle');
     expect(supabase.rpc).not.toHaveBeenCalled();
     expect(mockMarkTaken).not.toHaveBeenCalled();
     expect(mockMarkSkipped).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('transitions to "done" after successful action', async () => {
+    const { useNotificationDeepLinkAction } = await import('@/hooks/useNotificationDeepLinkAction');
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <MemoryRouter initialEntries={['/today?tomaId=done123&action=snooze']}>
+        {children}
+      </MemoryRouter>
+    );
+
+    const { result } = renderHook(() => useNotificationDeepLinkAction(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('done');
+    });
+    expect(mockNavigate).toHaveBeenCalledWith('/today', { replace: true });
+  });
+
+  it('transitions to "error" when RPC fails', async () => {
+    vi.mocked(supabase.rpc).mockRejectedValueOnce(new Error('RPC failed'));
+
+    const { useNotificationDeepLinkAction } = await import('@/hooks/useNotificationDeepLinkAction');
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <MemoryRouter initialEntries={['/today?tomaId=err123&action=snooze']}>
+        {children}
+      </MemoryRouter>
+    );
+
+    const { result } = renderHook(() => useNotificationDeepLinkAction(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('error');
+    });
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('transitions to "error" for unknown action value', async () => {
+    const { useNotificationDeepLinkAction } = await import('@/hooks/useNotificationDeepLinkAction');
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <MemoryRouter initialEntries={['/today?tomaId=bad123&action=unknown']}>
+        {children}
+      </MemoryRouter>
+    );
+
+    const { result } = renderHook(() => useNotificationDeepLinkAction(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('error');
+    });
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

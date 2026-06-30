@@ -2,7 +2,7 @@
 // when the URL contains ?action=taken|snooze|skip, then navigates to /today
 // (replacing) to clear the params and prevent re-firing.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useMarkTomaTaken, useMarkTomaSkipped } from '@/features/tomas/hooks';
@@ -15,6 +15,7 @@ export function useNotificationDeepLinkAction(): {
   const markTaken = useMarkTomaTaken();
   const markSkipped = useMarkTomaSkipped();
   const firedRef = useRef(false);
+  const [status, setStatus] = useState<'idle' | 'firing' | 'done' | 'error'>('idle');
 
   const tomaId = searchParams.get('tomaId');
   const action = searchParams.get('action');
@@ -23,6 +24,7 @@ export function useNotificationDeepLinkAction(): {
     if (!action || !tomaId || firedRef.current) return;
 
     firedRef.current = true;
+    setStatus('firing');
 
     const fireAction = async () => {
       try {
@@ -37,16 +39,19 @@ export function useNotificationDeepLinkAction(): {
             markSkipped.mutate({ tomaId, reason: 'notification-skip' });
             break;
           default:
+            setStatus('error');
             return;
         }
         navigate('/today', { replace: true });
+        setStatus('done');
       } catch {
         // On error, do NOT navigate — let the user retry manually
+        setStatus('error');
       }
     };
 
     fireAction();
   }, [action, tomaId, navigate, markTaken, markSkipped]);
 
-  return { status: action && tomaId ? 'firing' : 'idle' };
+  return { status };
 }
