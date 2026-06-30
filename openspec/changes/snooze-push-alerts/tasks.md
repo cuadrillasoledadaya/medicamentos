@@ -33,6 +33,12 @@ Chain strategy: stacked-to-main
 - **W-2 FIXED**: PR3 split into PR3a (hook, ~85 lines) and PR3b (modal+wiring, ~135 lines). Each under 200 lines.
 - **W-3 ACCEPTED**: PR3-T7 e2e test skipped — optional task.
 
+## Verify Phase Fixes (RESOLVED — RE-RUN #2)
+
+- **V-1 FIXED**: `eslint.config.js` `allowDefaultProject` now includes `tests/unit/hooks/*.test.{ts,tsx}` and `tests/unit/pages/*.test.tsx`. `pnpm lint` passes with 0 errors on all branches.
+- **V-2 FIXED**: `fix/ios-snooze-modal` rebased onto `fix/ios-snooze-hook` — PR3b now inherits the hook file + lint config. `pnpm typecheck` and `pnpm build` both pass.
+- **V-3 FIXED**: `useNotificationDeepLinkAction` now properly tracks `'idle' → 'firing' → 'done'` (success) and `'idle' → 'firing' → 'error'` (failure) transitions. 3 new test cases added (7 total). Contract matches design.md lines 178-180.
+
 ---
 
 ## PR 1 — SQL View Fix (snooze-re-trigger)
