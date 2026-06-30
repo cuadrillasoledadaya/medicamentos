@@ -4,10 +4,10 @@
 
 | Field | Value |
 |-------|-------|
-| Estimated changed lines | ~410 (PR1: 60, PR2: 150, PR3: 200) |
+| Estimated changed lines | ~470 (PR1: 100, PR2: 150, PR3a: 85, PR3b: 135) |
 | 400-line budget risk | Low |
 | Chained PRs recommended | Yes |
-| Suggested split | PR 1 → PR 2 → PR 3 |
+| Suggested split | PR 1 → PR 2 → PR 3a → PR 3b |
 | Delivery strategy | auto-chain |
 | Chain strategy | stacked-to-main |
 
@@ -20,15 +20,18 @@ Chain strategy: stacked-to-main
 
 | Unit | Goal | Likely PR | Notes |
 |------|------|-----------|-------|
-| 1 | SQL view fix: extend `tomas_due_for_push` for snoozed-expired tomas | PR 1 | Base: `main`. Pure SQL migration + test. |
+| 1 | SQL view fix: extend `tomas_due_for_push` for snoozed-expired tomas | PR 1 | Base: `main`. Pure SQL migration + pglite integration test. |
 | 2 | SW `openWindow` + `/today` route + highlight | PR 2 | Base: `main`. SW handler extraction, router, TodayPage. |
-| 3 | iOS modal + auto-trigger hook | PR 3 | Base: `main`. `IntakeActionModal`, `useNotificationDeepLinkAction`. |
+| 3a | Deep-link auto-trigger hook | PR 3a | Base: `main`. `useNotificationDeepLinkAction` + test. |
+| 3b | iOS modal + TodayPage wiring | PR 3b | Base: `main`. `IntakeActionModal` + test + TodayPage wiring. |
 
-## Gatekeeper Warnings
+## Gatekeeper Warnings (RESOLVED)
 
-- **`isIOS()` import**: `IntakeActionModal.tsx` lives in `src/features/notifications/` — import from `./scheduler` (same folder), matching `IosInstallBadge.tsx` pattern.
-- **Test path for PR1**: Use `tests/unit/migrations/snooze-retrigger-view.test.ts` — do NOT create `tests/integration/`.
-- **PR1 RED test**: Use a Supabase test client (not mocked modules) to assert the view's WHERE semantics.
+- **B-1 FIXED**: `sw.ts` now imports and uses `decideNotificationClick` from `swPushHandler.ts` — thin wrapper pattern per design D5.
+- **B-2 FIXED**: PR1 test uses pglite (in-process Postgres) with real fixture rows — asserts actual view WHERE semantics, not just regex.
+- **W-1 FIXED**: PR2 split into 2 commits (SW extraction + router/TodayPage). PR3b split into 2 commits (modal + wiring).
+- **W-2 FIXED**: PR3 split into PR3a (hook, ~85 lines) and PR3b (modal+wiring, ~135 lines). Each under 200 lines.
+- **W-3 ACCEPTED**: PR3-T7 e2e test skipped — optional task.
 
 ---
 
