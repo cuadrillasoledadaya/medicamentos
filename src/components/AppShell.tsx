@@ -24,6 +24,7 @@ const navItems = [
   { to: '/reports/export', label: 'Reportes' },
   { to: '/travel', label: 'Viajes' },
   { to: '/admin/interactions', label: 'Interacciones' },
+  { to: '/notifications', label: 'Notificaciones' },
   { to: '/settings', label: 'Ajustes' },
 ];
 

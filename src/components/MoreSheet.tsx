@@ -19,6 +19,7 @@ const moreItems: MoreItem[] = [
   { to: '/reports/export', label: 'Reportes', icon: '📄' },
   { to: '/travel', label: 'Viajes', icon: '✈️' },
   { to: '/admin/interactions', label: 'Interacciones', icon: '⚠️' },
+  { to: '/notifications', label: 'Notificaciones', icon: '🔔' },
   { to: '/settings', label: 'Ajustes', icon: '⚙️' },
 ];
 
