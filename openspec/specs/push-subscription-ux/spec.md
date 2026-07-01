@@ -97,6 +97,8 @@ The system SHALL display a small badge next to the `web_push` label reflecting t
 - AND the system SHALL NOT re-call `updateMutation.mutate()` (the preference is already saved)
 - AND the badge SHALL transition to `pending` then to `subscribed` or `failed` based on the new handshake result
 
+---
+
 ### Requirement: Subscribe handshake always upserts to push_subscriptions
 
 The system SHALL upsert the normalized subscription to `push_subscriptions` on every subscribe handshake, regardless of whether `registration.pushManager.getSubscription()` returns an existing subscription or a new one. The upsert SHALL use `onConflict: 'endpoint'` and SHALL include `user_id`, `endpoint`, `p256dh`, `auth`, `device_name`, `is_active = true`, and `last_seen_at = now()`.
@@ -167,6 +169,3 @@ The repository's migration history SHALL include `supabase/migrations/0021_notif
 - AND applying the migration a second time SHALL complete without error (using `DROP CONSTRAINT IF EXISTS` before re-adding)
 - AND the client's upsert with `onConflict: 'paciente_id,medication_id,channel'` SHALL correctly update an existing row instead of inserting a duplicate when `medication_id` is NULL
 
-## Recent changes
-
-- **2026-07-01 — fix-subscribe-push-upsert**: Added 3 requirements to push-subscription-ux: REQ-1 (always-upsert handshake), REQ-2 (key refresh on conflict), REQ-3 (upsert failure rolls back browser subscription).
