@@ -97,6 +97,63 @@ The system SHALL display a small badge next to the `web_push` label reflecting t
 - AND the system SHALL NOT re-call `updateMutation.mutate()` (the preference is already saved)
 - AND the badge SHALL transition to `pending` then to `subscribed` or `failed` based on the new handshake result
 
+### Requirement: Subscribe handshake always upserts to push_subscriptions
+
+The system SHALL upsert the normalized subscription to `push_subscriptions` on every subscribe handshake, regardless of whether `registration.pushManager.getSubscription()` returns an existing subscription or a new one. The upsert SHALL use `onConflict: 'endpoint'` and SHALL include `user_id`, `endpoint`, `p256dh`, `auth`, `device_name`, `is_active = true`, and `last_seen_at = now()`.
+
+#### Scenario: Re-toggle restores DB row after manual delete
+
+- GIVEN the user has previously subscribed AND the corresponding `push_subscriptions` row has been deleted (e.g. `DELETE FROM push_subscriptions` for VAPID debugging)
+- WHEN the user toggles `web_push` OFF then ON
+- THEN the client SHALL detect the cached `PushSubscription` from `pushManager.getSubscription()`
+- AND SHALL upsert it to `push_subscriptions` using `onConflict: 'endpoint'`
+- AND a row matching the existing browser endpoint SHALL appear in `push_subscriptions` with `is_active = true`
+
+#### Scenario: Fresh first-time subscription
+
+- GIVEN `pushManager.getSubscription()` returns `null` (no cached subscription)
+- WHEN the user toggles `web_push` ON for the first time
+- THEN the client SHALL call `pushManager.subscribe()` with the VAPID public key
+- AND SHALL upsert the resulting normalized subscription to `push_subscriptions` (the upsert inserts a new row since no conflict exists)
+- AND the badge SHALL transition to `subscribed` ("Push activo")
+
+#### Scenario: Multi-tab race — two tabs subscribe simultaneously
+
+- GIVEN two browser tabs are open with the same user logged in
+- WHEN both tabs call `subscribeToPush` within milliseconds of each other
+- THEN both upserts SHALL succeed at the DB level (PostgreSQL `ON CONFLICT DO UPDATE` is atomic)
+- AND the final row state SHALL reflect the last writer's values for `p256dh`, `auth`, `device_name`, `is_active`, and `last_seen_at`
+
+---
+
+### Requirement: Upsert refreshes auth keys and metadata on conflict
+
+When the upsert finds an existing row by `endpoint`, the system SHALL update `p256dh`, `auth`, `device_name`, `is_active`, and `last_seen_at` to the current values. The system SHALL preserve `created_at` and `id` on the existing row (the DB enforces this via `ON CONFLICT DO UPDATE`).
+
+#### Scenario: Browser session rotates p256dh/auth keys
+
+- GIVEN a `push_subscriptions` row already exists for the user's current endpoint
+- AND the browser has rotated its VAPID-derived keys (e.g. new session, different crypto context)
+- WHEN the user toggles `web_push` ON
+- THEN the upsert SHALL update the row's `p256dh` and `auth` columns to the new values
+- AND SHALL update `last_seen_at` to `now()`
+- AND SHALL NOT modify `created_at` or `id`
+
+---
+
+### Requirement: Upsert failure rolls back the browser subscription
+
+When the upsert to `push_subscriptions` fails for any reason (RLS rejection, network error, unique violation, etc.), the system SHALL call `subscription.unsubscribe()` to remove the browser-side subscription, SHALL throw an error to surface the failure to the UI, and SHALL NOT leave an orphan browser subscription pointing at a missing DB row.
+
+#### Scenario: Supabase upsert returns a non-null error
+
+- GIVEN the client has successfully obtained a `PushSubscription` (either from `pushManager.getSubscription()` or `pushManager.subscribe()`)
+- AND the Supabase upsert call returns `{ error }` with a non-null error
+- WHEN `subscribeToPush` processes the result
+- THEN the system SHALL call `subscription.unsubscribe()` to remove the browser subscription
+- AND SHALL throw an `Error` containing the Supabase error message
+- AND the UI SHALL surface the failure through the existing warning-banner flow (per the "Push handshake failures are translated and visible" requirement in the main spec)
+
 ---
 
 ### Requirement: Schema migration 0021 is captured in the repository
@@ -109,3 +166,7 @@ The repository's migration history SHALL include `supabase/migrations/0021_notif
 - THEN the `notification_settings_unique` constraint SHALL end in the state `UNIQUE NULLS NOT DISTINCT (paciente_id, medication_id, channel)`
 - AND applying the migration a second time SHALL complete without error (using `DROP CONSTRAINT IF EXISTS` before re-adding)
 - AND the client's upsert with `onConflict: 'paciente_id,medication_id,channel'` SHALL correctly update an existing row instead of inserting a duplicate when `medication_id` is NULL
+
+## Recent changes
+
+- **2026-07-01 — fix-subscribe-push-upsert**: Added 3 requirements to push-subscription-ux: REQ-1 (always-upsert handshake), REQ-2 (key refresh on conflict), REQ-3 (upsert failure rolls back browser subscription).
