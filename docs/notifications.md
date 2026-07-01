@@ -148,6 +148,20 @@ curl -X POST https://your-project.supabase.co/functions/v1/notify-fallback \
 | Email/SMS require user contact info | Function logs intent but doesn't send until profile table exists | v1: in-app only; v2: add user profile with email/phone |
 | Timezone conversion is approximate | `scheduled_at` stored as UTC without proper TZ conversion | Use `date-fns-tz` in Edge Function for accurate conversion |
 
+## Android: Enable Heads-Up Notifications (Popup)
+
+By default, Android shows web-push notifications in the notification bar only — not as a heads-up popup. To get popup behavior on Android 8+:
+
+1. Open Android **Settings** → **Apps** → **Chrome** (or the standalone PWA shell, e.g. "Medicamentos")
+2. Tap **Notifications**
+3. Find the **Medicamentos** channel (or the relevant push channel)
+4. Set the importance to **"Urgent"** / **"High"** (5 — sound + popup on screen)
+5. Also enable **"Pop on screen"** if available
+
+This is a per-device, per-channel setting — there's no app-side code that can change it. The web app already sends `urgency: 'high'` and `requireInteraction: true` in the payload, so once the channel is set to high importance the popup will appear over the lock screen / current app.
+
+iOS does not support heads-up popups for PWAs regardless of settings — notifications will always appear in the notification center and as banners when the device is unlocked.
+
 ## Environment Variables
 
 | Variable | Required | Purpose |
