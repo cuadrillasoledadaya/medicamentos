@@ -134,6 +134,11 @@ async function sendWebPush(
 
         results.push({ subscriptionId: sub.id, status: 'failed', error: errorMessage });
         console.error(`[notify-fallback] web-push failed for ${sub.id}: ${errorMessage}`);
+
+        // Diagnostic: log full error context so we can see what the push service is returning
+        const errorBody = (err as Record<string, unknown>)?.body as string | undefined;
+        const errorHeaders = (err as Record<string, unknown>)?.headers as Record<string, string> | undefined;
+        console.error(`[notify-fallback] web-push DIAG sub=${sub.id} statusCode=${statusCode ?? 'none'} message=${errorMessage} body=${errorBody ?? 'none'} headers=${errorHeaders ? JSON.stringify(errorHeaders) : 'none'}`);
       }
     }
   }
