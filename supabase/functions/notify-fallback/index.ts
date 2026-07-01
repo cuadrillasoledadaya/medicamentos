@@ -103,7 +103,18 @@ async function sendWebPush(
     } catch (err) {
       // web-push throws with statusCode on HTTP errors
       const statusCode = (err as Record<string, unknown>)?.statusCode as number | undefined;
+      const errorBody = (err as Record<string, unknown>)?.body as string | undefined;
+      const errorHeaders = (err as Record<string, unknown>)?.headers as Record<string, string> | undefined;
       const errorMessage = err instanceof Error ? err.message : String(err);
+
+      // Diagnostic: log full error context so we can see what FCM is returning
+      console.error(
+        `[notify-fallback] web-push DIAG sub=${sub.id} ` +
+        `statusCode=${statusCode ?? 'none'} ` +
+        `message=${errorMessage} ` +
+        `body=${errorBody ?? 'none'} ` +
+        `headers=${errorHeaders ? JSON.stringify(errorHeaders) : 'none'}`
+      );
 
       if (statusCode && isSubscriptionDead(statusCode)) {
         // 410/404 — subscription is dead, mark inactive
