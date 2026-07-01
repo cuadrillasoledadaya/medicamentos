@@ -85,42 +85,45 @@ export interface NormalizedSubscription {
 /**
  * Subscribe to Web Push notifications.
  *
- * Calls pushManager.subscribe with the VAPID public key, normalizes the
- * subscription object, and inserts a row into push_subscriptions via Supabase.
+ * Calls pushManager.subscribe with the VAPID public key (or reuses a cached
+ * subscription), normalizes the subscription object, and upserts a row into
+ * push_subscriptions via Supabase using onConflict: 'endpoint'.
  *
- * Returns the normalized subscription on success, or null if already subscribed.
+ * Returns the normalized subscription on success.
  */
 export async function subscribeToPush(
   registration: ServiceWorkerRegistration,
-): Promise<NormalizedSubscription | null> {
-  // Check for existing subscription (idempotent)
+): Promise<NormalizedSubscription> {
+  // 1. Get-or-subscribe: cached subscription OR fresh pushManager.subscribe()
   const existing = await registration.pushManager.getSubscription();
-  if (existing) {
-    return normalizeSubscription(existing);
-  }
+  const subscription =
+    existing ??
+    (await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(getVapidPublicKey()) as BufferSource,
+    }));
 
-  const applicationServerKey = urlBase64ToUint8Array(getVapidPublicKey());
-
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: applicationServerKey as BufferSource,
-  });
-
+  // 2. Normalize once
   const normalized = normalizeSubscription(subscription);
+  const lastSeenAt = new Date().toISOString();
 
-  // Persist to Supabase
-  const { error } = await supabase.from('push_subscriptions').insert({
-    user_id: (await supabase.auth.getUser()).data.user?.id,
-    endpoint: normalized.endpoint,
-    p256dh: normalized.keys.p256dh,
-    auth: normalized.keys.auth,
-    device_name: parseDeviceName(navigator.userAgent),
-    is_active: true,
-  } as any);
+  // 3. Always upsert — idempotent on `endpoint`
+  const { error } = await supabase.from('push_subscriptions').upsert(
+    {
+      user_id: (await supabase.auth.getUser()).data.user?.id,
+      endpoint: normalized.endpoint,
+      p256dh: normalized.keys.p256dh,
+      auth: normalized.keys.auth,
+      device_name: parseDeviceName(navigator.userAgent),
+      is_active: true,
+      last_seen_at: lastSeenAt,
+    } as any,
+    { onConflict: 'endpoint' },
+  );
 
+  // 4. Rollback the browser subscription on any upsert failure
   if (error) {
-    console.warn('[push-subscription] Supabase insert failed:', error);
-    // Subscription was created but storage failed — unsubscribe to avoid orphan
+    console.warn('[push-subscription] Supabase upsert failed:', error);
     await subscription.unsubscribe();
     throw new Error(`Failed to save push subscription: ${error.message}`);
   }
