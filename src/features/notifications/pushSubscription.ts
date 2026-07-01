@@ -108,6 +108,9 @@ export async function subscribeToPush(
   const lastSeenAt = new Date().toISOString();
 
   // 3. Always upsert — idempotent on `endpoint`
+  // The `as any` cast is needed because Supabase v2.108.2's hand-written Database types
+  // don't infer `.upsert()` correctly when the Insert type doesn't include every column
+  // that has a default. Verified by removal in sdd-verify phase — tsc fails without it.
   const { error } = await supabase.from('push_subscriptions').upsert(
     {
       user_id: (await supabase.auth.getUser()).data.user?.id,
