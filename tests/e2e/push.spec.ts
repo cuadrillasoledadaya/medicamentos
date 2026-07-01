@@ -605,4 +605,90 @@ test.describe('Web Push Notifications', () => {
 
     expect(vibrateInNotif).toBeFalsy();
   });
+
+  // --- Cache-vs-DB Sync Recovery (fix-subscribe-push-upsert) ---
+
+  test('push_subscriptions row is restored after manual delete and re-toggle', async ({ page, request }) => {
+    test.skip(!hasVapidKey(), 'VITE_VAPID_PUBLIC_KEY not configured');
+    test.skip(!process.env.SUPABASE_SERVICE_ROLE_KEY, 'SUPABASE_SERVICE_ROLE_KEY not set — requires admin access');
+    test.skip(!process.env.VITE_SUPABASE_URL, 'VITE_SUPABASE_URL not set');
+
+    const { createClient } = await import('@supabase/supabase-js');
+    const adminSupabase = createClient(
+      process.env.VITE_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+
+    await loginAsUserA(page);
+
+    const hasPush = await page.evaluate(() => 'PushManager' in window);
+    test.skip(!hasPush, 'PushManager not supported in this browser');
+
+    const swReady = await waitForServiceWorker(page);
+    test.skip(!swReady, 'Service Worker not ready');
+
+    await page.goto('/notifications');
+    await page.waitForLoadState('networkidle');
+
+    // 1. Enable web_push to create the subscription row
+    const webPushToggle = page.getByLabel(/Notificaciones push del navegador/i);
+    const isVisible = await webPushToggle.isVisible({ timeout: 5000 }).catch(() => false);
+    if (!isVisible) {
+      test.skip(true, 'web_push toggle not found');
+    }
+
+    const isChecked = await webPushToggle.isChecked();
+    if (!isChecked) {
+      await webPushToggle.click();
+      await page.waitForTimeout(2000);
+    }
+
+    // Wait for badge to appear
+    const badgeVisible = await page.getByText('Push activo').isVisible({ timeout: 5000 }).catch(() => false);
+    if (!badgeVisible) {
+      test.skip(true, 'Push subscription did not activate');
+    }
+
+    // 2. Get the current user's ID to find their row
+    const { data: { user } } = await adminSupabase.auth.admin.getUserByEmail(TEST_USER_A.email);
+    if (!user) {
+      test.skip(true, 'Could not find test user via admin auth');
+    }
+
+    // 3. Delete the push_subscriptions row(s) for this user
+    const { error: deleteError } = await adminSupabase
+      .from('push_subscriptions')
+      .delete()
+      .eq('user_id', user.id);
+    if (deleteError) {
+      test.skip(true, `Failed to delete row: ${deleteError.message}`);
+    }
+
+    // Verify the row is gone
+    const { count } = await adminSupabase
+      .from('push_subscriptions')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id);
+    expect(count).toBe(0);
+
+    // 4. Toggle web_push OFF, then ON
+    await webPushToggle.click(); // OFF
+    await page.waitForTimeout(1000);
+    await webPushToggle.click(); // ON
+    await page.waitForTimeout(3000);
+
+    // 5. Assert the row is back in push_subscriptions
+    const { data: rows, error: queryError } = await adminSupabase
+      .from('push_subscriptions')
+      .select('id, is_active')
+      .eq('user_id', user.id);
+    expect(queryError).toBeNull();
+    expect(rows).not.toBeNull();
+    expect(rows!.length).toBeGreaterThan(0);
+    expect(rows![0].is_active).toBe(true);
+
+    // Also assert the badge is visible again
+    const badgeAfter = await page.getByText('Push activo').isVisible({ timeout: 3000 }).catch(() => false);
+    expect(badgeAfter).toBeTruthy();
+  });
 });

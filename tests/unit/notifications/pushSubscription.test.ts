@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parseDeviceName } from '@/features/notifications/pushSubscription';
+import { describe, it, expect, vi } from 'vitest';
+import { parseDeviceName, subscribeToPush } from '@/features/notifications/pushSubscription';
 
 /**
  * Unit tests for parseDeviceName — UA string → short label.
@@ -74,5 +74,77 @@ describe('parseDeviceName', () => {
     const ua =
       'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.36';
     expect(parseDeviceName(ua)).toBe('Samsung Internet on Android');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// subscribeToPush tests — regression: fix-subscribe-push-upsert
+// ---------------------------------------------------------------------------
+
+vi.mock('@/lib/supabase', () => ({
+  supabase: {
+    from: vi.fn(),
+    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-123' } } }) },
+  },
+}));
+
+const mockSupabase = (await import('@/lib/supabase')).supabase as any;
+
+function fakeSubscription(endpoint: string) {
+  return {
+    endpoint,
+    toJSON: () => ({ endpoint, keys: { p256dh: 'p', auth: 'a' } }),
+    unsubscribe: vi.fn().mockResolvedValue(true),
+  };
+}
+
+function fakeRegistration(sub: PushSubscription | null) {
+  return {
+    pushManager: {
+      getSubscription: vi.fn().mockResolvedValue(sub),
+      subscribe: vi.fn(),
+    },
+  } as unknown as ServiceWorkerRegistration;
+}
+
+describe('subscribeToPush', () => {
+  it('upserts on the cached-subscription path (regression: fix-subscribe-push-upsert)', async () => {
+    const sub = fakeSubscription('https://push.example/abc');
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    mockSupabase.from.mockReturnValue({ upsert });
+
+    const result = await subscribeToPush(fakeRegistration(sub as any));
+
+    expect(upsert).toHaveBeenCalledTimes(1);
+    const [row, opts] = upsert.mock.calls[0];
+    expect(opts).toEqual({ onConflict: 'endpoint' });
+    expect(row.endpoint).toBe('https://push.example/abc');
+    expect(row.is_active).toBe(true);
+    expect(row.last_seen_at).toEqual(expect.any(String));
+    expect(sub.unsubscribe).not.toHaveBeenCalled();
+    expect(result.endpoint).toBe('https://push.example/abc');
+  });
+
+  it('upserts on the fresh-subscribe path (no cached subscription)', async () => {
+    const sub = fakeSubscription('https://push.example/xyz');
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    mockSupabase.from.mockReturnValue({ upsert });
+
+    const reg = fakeRegistration(null);
+    (reg.pushManager.subscribe as any).mockResolvedValue(sub);
+
+    await subscribeToPush(reg);
+
+    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ endpoint: 'https://push.example/xyz' }), { onConflict: 'endpoint' });
+  });
+
+  it('unsubscribes and throws when upsert fails', async () => {
+    const sub = fakeSubscription('https://push.example/q');
+    mockSupabase.from.mockReturnValue({
+      upsert: vi.fn().mockResolvedValue({ error: { message: 'RLS violation' } }),
+    });
+
+    await expect(subscribeToPush(fakeRegistration(sub as any))).rejects.toThrow(/RLS violation/);
+    expect(sub.unsubscribe).toHaveBeenCalledTimes(1);
   });
 });
